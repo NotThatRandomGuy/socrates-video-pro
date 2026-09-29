@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Socrates Video Pro</title>
+<meta name="description" content="Socrates Video Pro: local video editing, canvas cropping, effects, animation, and export.">
+<meta name="theme-color" content="#10131b">
+<link rel="icon" href="assets/icon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Caveat:wght@400;600;700&family=Dancing+Script:wght@400;700&family=Inter:wght@300;400;500;600;700;800;900&family=Lobster&family=Lora:wght@400;600;700&family=Montserrat:wght@300;400;500;600;700;800;900&family=Oswald:wght@400;500;600;700&family=Pacifico&family=Playfair+Display:wght@400;600;700;900&family=Poppins:wght@400;600;700;800&family=Press+Start+2P&family=Raleway:wght@400;600;700;800&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body class="booting">
+
+<!-- ================= TOP BAR ================= -->
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">S</span> Socrates <em>VIDEO PRO</em></div>
+  <nav id="menubar" class="menubar"></nav>
+  <div class="sep"></div>
+  <button id="btnImport" title="Import media (Ctrl+I)">📁 Import</button>
+  <button id="btnAddText" title="Add text (Ctrl+T)">T Text</button>
+  <div class="sep"></div>
+  <button id="btnUndo" class="icon" title="Undo (Ctrl+Z)">↶</button>
+  <button id="btnRedo" class="icon" title="Redo (Ctrl+Y)">↷</button>
+  <div class="spacer"></div>
+  <span id="projTitle" class="proj-title"></span>
+  <div class="spacer"></div>
+  <button id="btnOpen" title="Open project (Ctrl+O)">Open</button>
+  <button id="btnSave" title="Save project (Ctrl+S)">Save</button>
+  <button id="btnHelp" class="icon" title="Keyboard shortcuts (?)">?</button>
+  <button id="btnExport" class="primary" title="Export video (Ctrl+M)">⬇ Export</button>
+</header>
+
+<!-- ================= MAIN ================= -->
+<div class="main">
+  <!-- left: assets -->
+  <aside class="left-panel" id="leftPanel">
+    <div class="asset-tabs">
+      <button class="asset-tab" data-tab="media">Media</button>
+      <button class="asset-tab" data-tab="effects">Effects</button>
+      <button class="asset-tab" data-tab="transitions">Transitions</button>
+      <button class="asset-tab" data-tab="titles">Titles</button>
+      <button class="asset-tab" data-tab="templates">Templates</button>
+    </div>
+    <div class="asset-panel" id="panel-media"></div>
+    <div class="asset-panel hidden" id="panel-effects"></div>
+    <div class="asset-panel hidden" id="panel-transitions"></div>
+    <div class="asset-panel hidden" id="panel-titles"></div>
+    <div class="asset-panel hidden" id="panel-templates"></div>
+  </aside>
+  <div class="splitter v" id="splitLeft"></div>
+
+  <!-- center: preview -->
+  <section class="center">
+    <div class="canvas-toolbar" aria-label="Canvas tools">
+      <span class="canvas-heading">PREVIEW</span><span id="canvasSize" class="canvas-size"></span>
+      <div class="spacer"></div>
+      <button id="btnCanvasCrop" title="Crop the output canvas without resizing your clips">⛶ Crop canvas</button>
+      <button id="btnCenterX" title="Center selected clips horizontally">↔ Center</button>
+      <button id="btnCenterY" title="Center selected clips vertically">↕ Center</button>
+      <button id="btnPreviewSnap" class="toggle active" aria-pressed="true" title="Snap to canvas center (N). Hold Alt while dragging to bypass.">Snap</button>
+    </div>
+    <div class="preview-area" id="previewArea">
+      <div class="preview-stack">
+        <canvas id="previewCanvas" width="1920" height="1080"></canvas>
+        <canvas id="previewOverlay" class="overlay"></canvas>
+      </div>
+      <div class="meters" title="Master output level">
+        <div class="meter"><div id="meterL" class="meter-fill"></div></div>
+        <div class="meter"><div id="meterR" class="meter-fill"></div></div>
+      </div>
+    </div>
+    <div class="playback">
+      <div class="tc" id="tcCurrent" title="Click to enter timecode">00:00:00:00</div>
+      <button id="btnStart" class="icon" title="Go to start (Home)">⏮</button>
+      <button id="btnPrev" class="icon" title="Previous frame (←)">◂</button>
+      <button id="btnPlay" class="icon play" title="Play (Space)">▶</button>
+      <button id="btnNext" class="icon" title="Next frame (→)">▸</button>
+      <button id="btnEnd" class="icon" title="Go to end (End)">⏭</button>
+      <button id="btnLoop" class="icon" title="Loop playback">🔁</button>
+      <span id="rateLabel" class="rate"></span>
+      <div class="tc total" id="tcTotal">00:00:00:00</div>
+      <div class="sep"></div>
+      <button id="btnIn" class="icon" title="Set In (I)">⟦</button>
+      <button id="btnOut" class="icon" title="Set Out (O)">⟧</button>
+      <button id="btnMarker" class="icon" title="Add marker (M)">◆</button>
+      <div class="spacer"></div>
+      <select id="previewZoomSel" title="Preview zoom"><option value="fit">Fit</option><option value="0.25">25%</option><option value="0.5">50%</option><option value="1">100%</option><option value="2">200%</option></select>
+      <span id="previewZoomLabel" class="muted small"></span>
+      <select id="qualitySel" title="Preview playback quality"><option value="1">Full</option><option value="0.5">1/2</option><option value="0.25">1/4</option></select>
+      <button id="btnSafe" class="icon" title="Safe areas (Ctrl+')">⛶</button>
+      <button id="btnSnapshot" class="icon" title="Export frame as PNG (Ctrl+Shift+E)">📷</button>
+      <button id="btnFullscreen" class="icon" title="Fullscreen (Ctrl+Shift+F)">⛶</button>
+      <div class="sep"></div>
+      <button id="btnMute" class="icon" title="Mute">🔊</button>
+      <input type="range" id="masterVol" min="0" max="1.5" step="0.01" value="1" title="Master volume">
+    </div>
+  </section>
+
+  <div class="splitter v" id="splitRight"></div>
+  <!-- right: inspector -->
+  <aside class="props" id="inspector"></aside>
+</div>
+
+<!-- ================= TIMELINE ================= -->
+<div class="splitter h" id="splitBottom"></div>
+<div class="timeline-area" id="timelineArea">
+  <div class="timeline-toolbar">
+    <div class="tool-group">
+      <button data-tool="select" class="icon" title="Selection tool (V)">↖</button>
+      <button data-tool="razor" class="icon" title="Razor tool (C)">✂</button>
+      <button data-tool="hand" class="icon" title="Hand tool (H)">✋</button>
+    </div>
+    <div class="sep"></div>
+    <button id="btnSnap" class="toggle" title="Snapping (N)">🧲 Snap</button>
+    <button id="btnRipple" class="toggle" title="Ripple / insert editing (R)">⇉ Ripple</button>
+    <div class="sep"></div>
+    <button id="btnSplit" title="Split at playhead (S)">✂ Split</button>
+    <button id="btnDelete" title="Delete (Del)">🗑</button>
+    <button id="btnRippleDelete" title="Ripple delete (Shift+Del)">🗑⇤</button>
+    <div class="sep"></div>
+    <input id="tlTimecode" class="tc-input" value="00:00:00:00" title="Playhead timecode (type to seek)">
+    <div class="spacer"></div>
+    <button id="btnZoomOut" class="icon" title="Zoom out (-)">−</button>
+    <input type="range" id="tlZoom" title="Timeline zoom">
+    <button id="btnZoomIn" class="icon" title="Zoom in (=)">+</button>
+    <button id="btnZoomFit" title="Zoom to fit (Shift+Z)">Fit</button>
+  </div>
+  <div class="timeline-body">
+    <div class="tl-headers" id="tlHeaders"></div>
+    <div class="tl-scroll" id="tlScroll">
+      <div class="tl-content" id="tlContent">
+        <canvas id="tlRuler" class="tl-ruler" height="30"></canvas>
+        <div class="tl-inout" id="tlInOut"></div>
+        <div class="tl-markers" id="tlMarkers"></div>
+        <div class="tl-tracks" id="tlTracks"></div>
+        <div class="tl-marquee" id="tlMarquee"></div>
+        <div class="tl-snap" id="tlSnapLine"></div>
+        <div class="tl-playhead" id="tlPlayhead"><div class="head"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="boot-screen"><div>🎬 Loading Video Editor Pro…</div></div>
+
+<script src="js/core/utils.js"></script>
+<script src="js/core/state.js"></script>
+<script src="js/media/media.js"></script>
+<script src="js/render/glfx.js"></script>
+<script src="js/render/compositor.js"></script>
+<script src="js/audio/engine.js"></script>
+<script src="js/editing/commands.js"></script>
+<script src="js/ui/preview.js"></script>
+<script src="js/ui/canvas-tools.js"></script>
+<script src="js/ui/timeline.js"></script>
+<script src="js/ui/inspector.js"></script>
+<script src="js/ui/panels.js"></script>
+<script src="js/export/muxers.js"></script>
+<script src="js/export/exporter.js"></script>
+<script src="js/media/recorder.js"></script>
+<script src="js/core/project.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+tests/.chrome-profile*/
+tests/*.log
+.edit.cjs
+SocratesVideoPro-data/
+*.vep.json
+*.log

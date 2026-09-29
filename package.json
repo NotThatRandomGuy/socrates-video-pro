@@ -1,0 +1,59 @@
+{
+  "name": "socrates-video-pro",
+  "version": "1.0.0",
+  "description": "A private, local video editing studio for the web and Windows",
+  "author": "NotThatRandomGuy",
+  "license": "MIT",
+  "private": true,
+  "main": "desktop/main.cjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NotThatRandomGuy/socrates-video-pro.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "serve": "node scripts/serve.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node scripts/test.mjs",
+    "build:web": "node scripts/build-web.mjs",
+    "build:win": "electron-builder --win nsis portable --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.5.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "io.github.notthatrandomguy.socrates-video-pro",
+    "productName": "Socrates Video Pro",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "css/**/*",
+      "js/**/*",
+      "assets/**/*",
+      "desktop/**/*",
+      "LICENSE",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.ico",
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "Socrates-Video-Pro-${version}-Setup-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Socrates-Video-Pro-${version}-Portable-${arch}.${ext}"
+    }
+  }
+}
