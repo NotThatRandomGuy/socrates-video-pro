@@ -3,6 +3,9 @@ const { app, BrowserWindow, Menu, session, dialog, desktopCapturer } = require('
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
+// Do not inherit a packaging launcher's request to disable Chromium's sandbox.
+app.commandLine.removeSwitch('no-sandbox');
+app.enableSandbox();
 
 // The portable build keeps its cache beside the executable, including media and recovery.
 if (process.env.PORTABLE_EXECUTABLE_DIR) {

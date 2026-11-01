@@ -43,7 +43,7 @@ socrates-video-pro
 sudo apt remove socrates-video-pro
 ```
 
-Linux keeps recovery and media cache in your user configuration directory (normally `~/.config/Socrates Video Pro`). Keep Chromium's sandbox enabled; launch as your normal user. Wayland screen capture needs a working PipeWire desktop portal. Linux screen recording supports video and microphone capture; system-audio loopback is not provided by this desktop integration. Camera, microphone, codecs, and GPU support depend on your distribution and hardware.
+Linux keeps recovery and media cache in your user configuration directory (normally `~/.config/Socrates Video Pro`). Launch as your normal user. The AppImage requires working unprivileged user namespaces; if your distribution restricts them, use the Debian package with its installed sandbox helper. The app keeps Chromium's sandbox enabled. Wayland screen capture needs a working PipeWire desktop portal. Linux screen recording supports video and microphone capture; system-audio loopback is not provided by this desktop integration. Camera, microphone, codecs, and GPU support depend on your distribution and hardware.
 
 To run the source in a browser, download or clone this repository and open `index.html`. Alternatively, with Node.js 24 installed, run `node scripts/serve.mjs` and open [localhost:8765](http://localhost:8765). Recording requires a secure context: HTTPS, localhost, or the desktop app. Support for file-based recording depends on your browser.
 

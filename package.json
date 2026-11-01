@@ -58,6 +58,9 @@
     "portable": {
       "artifactName": "Socrates-Video-Pro-${version}-Portable-${arch}.${ext}"
     },
+    "appImage": {
+      "executableArgs": []
+    },
     "linux": {
       "target": [
         "AppImage",
