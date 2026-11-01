@@ -16,7 +16,9 @@ async function api(route,options={}){
   if(!response.ok)throw Error('GitHub request failed ('+response.status+'): '+route.replace(/\?.*/,''));
   return response;
 }
-const release=await (await api('releases/tags/'+tag)).json();if(!release.draft)throw Error('Only a draft release can be finalized');
+// Drafts are visible in the authenticated release list, but tag lookup can return 404.
+const releases=await (await api('releases?per_page=100')).json();
+const release=releases.find(r=>r.tag_name===tag);if(!release?.draft)throw Error('Only a draft release can be finalized');
 const dir=path.join(root,'dist','release');fs.mkdirSync(dir,{recursive:true});
 const expected=[`Socrates-Video-Pro-${version}-Setup-x64.exe`,`Socrates-Video-Pro-${version}-Portable-x64.exe`,`Socrates-Video-Pro-${version}-Linux-x86_64.AppImage`,`Socrates-Video-Pro-${version}-Linux-amd64.deb`,'Socrates-Video-Pro-Web.zip','release-signing.cer','release-public-key.pem','SHA256SUMS.txt','SHA256SUMS.txt.sig'];
 if(fs.readdirSync(dir).some(n=>!expected.includes(n)))throw Error('Staging folder contains files from another release; use an empty dist/release folder');
