@@ -25,8 +25,11 @@ node tests/smoke.mjs           # headless Chrome functional suite (must print no
 node tests/interact.mjs        # mouse/keyboard interaction suite
 node tests/fileproto.mjs       # file:// mode
 node tests/canvas.mjs          # output crop, center alignment, dialogs, cropped export
+node tests/audit.mjs           # safety, locked tracks, ripple, GPU, audio, recording, export failures
 ```
 Tests need Chrome/Edge installed; they spawn unique headless profiles and local servers on dynamically assigned ports. `npm test` runs all checks. `npm run build:win` builds the Windows installer and portable EXE; `npm run build:web` copies the static app into `dist/web`.
+
+`npm run build:linux` builds AppImage and Debian packages on Linux. Keep `appImage.executableArgs` empty and the desktop sandbox enabled. Release tags prepare a draft; sign Windows binaries locally with `npm run build:win:signed`, then stage/sign/verify/publish with the release scripts. Only the public certificate belongs in Git. `ProjectValidation.validate` must finish before replacing the live project. Await `AudioEngine.ready()` before recording a Web Audio stream.
 
 ## Encoding
 All files are UTF-8 (no BOM) and contain emoji/symbols in UI labels. Never round-trip them through PowerShell `Get-Content`/`Set-Content` (defaults to cp1252 and mangles them); use the edit tool or Node for file rewrites.

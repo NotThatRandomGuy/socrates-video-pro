@@ -18,7 +18,12 @@ async function api(route,options={}){
 }
 const release=await (await api('releases/tags/'+tag)).json();if(!release.draft)throw Error('Only a draft release can be finalized');
 const dir=path.join(root,'dist','release');fs.mkdirSync(dir,{recursive:true});
+const expected=[`Socrates-Video-Pro-${version}-Setup-x64.exe`,`Socrates-Video-Pro-${version}-Portable-x64.exe`,`Socrates-Video-Pro-${version}-Linux-x86_64.AppImage`,`Socrates-Video-Pro-${version}-Linux-amd64.deb`,'Socrates-Video-Pro-Web.zip','release-signing.cer','release-public-key.pem','SHA256SUMS.txt','SHA256SUMS.txt.sig'];
+if(fs.readdirSync(dir).some(n=>!expected.includes(n)))throw Error('Staging folder contains files from another release; use an empty dist/release folder');
 if(process.argv[2]==='stage'){
+  const built=JSON.parse(fs.readFileSync(path.join(root,'dist','signed-build.json'),'utf8'));
+  const head=execFileSync('git',[...args,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
+  if(built.commit!==head||built.version!==version)throw Error('Rebuild signed Windows packages from the release commit');
   for(const asset of release.assets.filter(a=>/\.(AppImage|deb|zip)$/.test(a.name))){
     if(path.basename(asset.name)!==asset.name)throw Error('Unsafe asset name');
     const response=await api('releases/assets/'+asset.id,{headers:{Accept:'application/octet-stream'}});
@@ -37,7 +42,7 @@ if(process.argv[2]==='stage'){
   if(ref.object.sha!==local)throw Error('Local checkout does not match the release tag');
   const runs=await(await api('actions/runs?head_sha='+local)).json();
   if(!runs.workflow_runs.some(r=>r.head_branch===tag&&r.conclusion==='success'))throw Error('Tagged release checks have not succeeded');
-  const names=fs.readdirSync(dir);for(const ext of ['Setup-x64.exe','Portable-x64.exe','.AppImage','.deb','Web.zip','SHA256SUMS.txt.sig'])if(!names.some(n=>n.endsWith(ext)))throw Error('Missing release artifact '+ext);
+  const names=fs.readdirSync(dir);for(const name of expected)if(!names.includes(name))throw Error('Missing release artifact '+name);
   for(const name of names.filter(n=>n.endsWith('.exe'))){
     const thumb=execFileSync('powershell.exe',['-NoProfile','-File',path.join(root,'scripts','verify-windows.ps1'),'-FilePath',path.join(dir,name)],{encoding:'utf8',windowsHide:true}).trim();
     if(thumb!==fs.readFileSync(path.join(root,'signing/thumbprint.txt'),'utf8').trim())throw Error('Wrong Windows signer');

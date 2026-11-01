@@ -2,7 +2,7 @@
 
 The review covers the project's state and history, project loading and recovery, media import and recording, timeline commands and pointer interactions, keyframes, preview playback, canvas cropping and alignment, WebGL effects, audio playback and offline mixing, export and muxing, dialogs, and desktop permissions and packaging.
 
-The automated suites exercise generated and recorded media, linked clips, trimming/splitting/ripple edits, animation, effects, crop pixels, center snapping, save/load and undo, malformed projects, file-picker cancellation, locked tracks, audio mute, recording cleanup, failure recovery, and actual MP4/WebM exports. Browser console errors fail the suites. Each suite uses its own temporary browser profile and local server. Packaged-desktop checks render a cropped composition and produce a small WebM inside the sandboxed application.
+The 100 automated checks exercise generated and recorded media, linked clips, trimming/splitting/ripple edits, animation, effects, crop pixels, center snapping, save/load and undo, malformed projects, file-picker cancellation, locked tracks, audio mute, recording cleanup, failure recovery, and actual MP4/WebM exports. Browser console errors fail the suites. Each suite uses its own temporary browser profile and local server. Packaged-desktop checks render a cropped composition and produce a small WebM inside the sandboxed application.
 
 Windows checks run locally and in GitHub Actions. Linux browser checks, AppImage extraction/launch, and Debian installation/launch run on Ubuntu 22.04 in GitHub Actions. The Linux application keeps Chromium's sandbox enabled. Packaging checks use a virtual X11 display; they do not simulate every desktop environment.
 

@@ -145,7 +145,7 @@ Download all assets into one folder. From this repository, run `node scripts/ver
 
 You can also verify the detached manifest signature with `openssl dgst -sha256 -verify release-public-key.pem -signature SHA256SUMS.txt.sig SHA256SUMS.txt`, then use `sha256sum -c SHA256SUMS.txt` on Linux. Obtain the public key from this repository or compare the certificate fingerprint independently; a signature checked against an unverified replacement key cannot authenticate a download. Windows file Properties → Digital Signatures shows the embedded executable signature. Self-signing does not provide a publicly trusted publisher or timestamp. Do not install this certificate as a trusted root to hide warnings.
 
-Maintainers can create their own local certificate with `powershell -File scripts/create-signing-certificate.ps1`, then run `npm run build:win:signed`. This changes the public signing identity; update the published fingerprint for your own distribution. No private key belongs in GitHub or release assets.
+Maintainers can create their own local certificate with `powershell -File scripts/create-signing-certificate.ps1`, commit the public signing identity, then run `npm run build:win:signed` from a clean checkout. The build records its source commit, and release staging rejects packages from another commit. A new certificate changes the signing identity; update the published fingerprint for your own distribution. No private key belongs in GitHub or release assets.
 
 ## Tests
 
