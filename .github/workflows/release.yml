@@ -51,7 +51,7 @@ jobs:
         run: |
           chmod +x dist/*.AppImage
           cd dist
-          ./Socrates-Video-Pro-*-Linux-x64.AppImage --appimage-extract >/dev/null
+          ./Socrates-Video-Pro-*-Linux-*.AppImage --appimage-extract >/dev/null
           timeout 90s xvfb-run -a ./squashfs-root/socrates-video-pro --smoke-test
           sudo apt-get update -qq
           sudo apt-get install -y ./*.deb

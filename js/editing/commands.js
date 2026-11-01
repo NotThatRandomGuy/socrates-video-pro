@@ -86,7 +86,7 @@ const Cmd = (() => {
       if (kind === 'video' && m.hasAudio && m.audioBuffer) {
         const linkId = U.uid('ln'); clip.linkId = linkId;
         aclip = Model.newClip('audio', { mediaId, name: m.name, duration: dur, sourceDuration: dur, linkId });
-        const at = ensureTrack('audio', 0); placeClip(aclip, at, clip.start, 'overwrite');
+        const at = audioTracks().find(t => !t.locked) || ensureTrack('audio', audioTracks().length); placeClip(aclip, at, clip.start, 'overwrite');
       }
       recalcDuration(); if (sel) select(clip.id);
       return clip;
@@ -209,7 +209,7 @@ const Cmd = (() => {
   function alignToPlayhead(edge = 'start') { mutate('Align', () => selectedClips().filter(editable).forEach(c => { c.start = edge === 'start' ? state.currentTime : Math.max(0, state.currentTime - c.duration); })); refresh(); }
   function setTransition(ids, side, type, duration) { mutate('Transition', () => ids.map(findClip).filter(editable).forEach(c => { c[side === 'in' ? 'transitionIn' : 'transitionOut'] = { type, duration: duration ?? c.transitionIn.duration }; })); }
   function applyTransitionBetweenSelected(type, duration = .6) { // for adjacent pairs among selection, transitionIn on the later clip
-    mutate('Transition', () => { const cs = selectedClips(); if (cs.length === 1) { cs[0].transitionIn = { type, duration }; cs[0].transitionOut = { type, duration }; return; } cs.forEach(c => { const tr = findTrackOfClip(c.id); const prev = tr.clips.filter(x => Math.abs(clipEnd(x) - c.start) < .02 && x !== c)[0]; if (prev) c.transitionIn = { type, duration }; else c.transitionIn = { type, duration }; }); });
+    mutate('Transition', () => { const cs = selectedClips().filter(editable); if (cs.length === 1) { cs[0].transitionIn = { type, duration }; cs[0].transitionOut = { type, duration }; return; } cs.forEach(c => { c.transitionIn = { type, duration }; }); });
   }
   function addEffect(ids, type) { let fx = null; mutate('Add effect', () => ids.map(findClip).filter(editable).forEach(c => { fx = Model.newEffect(type); if (fx) c.effects.push(fx); })); if (fx) state.selectedEffectId = fx.id; return fx; }
   function removeEffect(clip, fxId) { if (!editable(clip)) return; mutate('Remove effect', () => { clip.effects = clip.effects.filter(f => f.id !== fxId); Object.keys(clip.keyframes || {}).forEach(k => { if (k.startsWith('fx.' + fxId + '.')) delete clip.keyframes[k]; }); }); }

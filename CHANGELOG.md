@@ -21,6 +21,8 @@
 - Fixed linked audio/video ripple deletion moving later clips twice, and ripple paste leaving incorrect spacing.
 - Fixed trimming repeatedly shifting animation keys during a single drag, and splitting clips changing animated curves.
 - Prevented edits, inserts, ripple movement, effects, and speed changes from modifying locked tracks.
+- Preserved a video's linked audio when the first audio track is locked, and prevented transitions from changing locked clips.
+- Fixed relinking audio continuing to play the previous source, and rejected replacements of the wrong media type.
 - Fixed invalid numbers and failed edits corrupting project history; failed edits now restore the previous project.
 - Fixed stale playback, audio connections, and timeline scrolling after opening or creating a project.
 - Fixed middle-mouse timeline panning and malformed drag-and-drop data errors.

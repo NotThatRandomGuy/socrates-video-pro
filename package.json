@@ -67,7 +67,8 @@
       "icon": "assets/icon.png",
       "executableName": "socrates-video-pro",
       "maintainer": "NotThatRandomGuy <noreply@users.noreply.github.com>",
-      "artifactName": "Socrates-Video-Pro-${version}-Linux-${arch}.${ext}"
+      "artifactName": "Socrates-Video-Pro-${version}-Linux-${arch}.${ext}",
+      "syncDesktopName": true
     },
     "deb": {
       "depends": [
@@ -83,5 +84,6 @@
         "libgbm1"
       ]
     }
-  }
+  },
+  "desktopName": "socrates-video-pro.desktop"
 }

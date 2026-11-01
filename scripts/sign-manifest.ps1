@@ -1,6 +1,6 @@
 param([string]$Directory = 'dist/release')
 $ErrorActionPreference = 'Stop'
-Import-Module Microsoft.PowerShell.Security
+Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1')
 $root = Split-Path $PSScriptRoot -Parent
 $thumbprint = [IO.File]::ReadAllText((Join-Path $root 'signing/thumbprint.txt')).Trim()
 $certificate = Get-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint"

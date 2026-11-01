@@ -12,8 +12,8 @@ Download the latest files from [Releases](https://github.com/NotThatRandomGuy/so
 | --- | --- |
 | `Socrates-Video-Pro-1.1.0-Setup-x64.exe` | Windows 10/11, 64-bit. Run the installer, choose a folder, and launch from Start or the desktop shortcut. Uninstall through Windows Settings. |
 | `Socrates-Video-Pro-1.1.0-Portable-x64.exe` | Place in a writable folder and run. No installation is required. Recovery and media cache live in the adjacent `SocratesVideoPro-data` folder; keep that folder with the executable when moving it. |
-| `Socrates-Video-Pro-1.1.0-Linux-x64.AppImage` | Linux x86-64, Ubuntu 22.04 or compatible. Make executable and launch; instructions below. |
-| `Socrates-Video-Pro-1.1.0-Linux-x64.deb` | Debian/Ubuntu x86-64. Install with the system package manager; instructions below. |
+| `Socrates-Video-Pro-1.1.0-Linux-x86_64.AppImage` | Linux x86-64, Ubuntu 22.04 or compatible. Make executable and launch; instructions below. |
+| `Socrates-Video-Pro-1.1.0-Linux-amd64.deb` | Debian/Ubuntu x86-64. Install with the system package manager; instructions below. |
 | `Socrates-Video-Pro-Web.zip` | Extract and open `index.html` in current Chrome or Edge. You can also serve the extracted files from any static web host. |
 
 Windows executables are signed locally with a **self-signed** certificate attributed to NotThatRandomGuy. Windows can still show an unknown-publisher warning. The public certificate is included; its non-exportable private key stays on the signing machine. All release downloads are covered by a locally signed checksum list, including Linux packages and the web ZIP. See verification below.
@@ -23,21 +23,21 @@ Windows executables are signed locally with a **self-signed** certificate attrib
 For AppImage:
 
 ```sh
-chmod +x Socrates-Video-Pro-1.1.0-Linux-x64.AppImage
-./Socrates-Video-Pro-1.1.0-Linux-x64.AppImage
+chmod +x Socrates-Video-Pro-1.1.0-Linux-x86_64.AppImage
+./Socrates-Video-Pro-1.1.0-Linux-x86_64.AppImage
 ```
 
 If your distribution lacks AppImage's FUSE support, extract and run instead:
 
 ```sh
-./Socrates-Video-Pro-1.1.0-Linux-x64.AppImage --appimage-extract
+./Socrates-Video-Pro-1.1.0-Linux-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
 For Debian/Ubuntu:
 
 ```sh
-sudo apt install ./Socrates-Video-Pro-1.1.0-Linux-x64.deb
+sudo apt install ./Socrates-Video-Pro-1.1.0-Linux-amd64.deb
 socrates-video-pro
 # To uninstall:
 sudo apt remove socrates-video-pro
