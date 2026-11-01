@@ -165,6 +165,8 @@ const Media = (() => {
   /* relink: user picks a file for a missing media id */
   async function relink(m) {
     const [f] = await U.pickFiles('video/*,audio/*,image/*', false); if (!f) return;
+    if (typeOf(f) !== m.type) return UI.toast('Choose a replacement of the same media type');
+    Player.pause(); AudioEngine.resetMedia();
     // Existing clip players otherwise keep the old missing/replaced object URL.
     mediaUsedBy(m.id).forEach(c => releaseClip(c.id));
     scratch.delete(m.id);

@@ -23,6 +23,15 @@ const AudioEngine = (() => {
     return actx;
   }
   function resume() { const c = ctx(); if (c.state === 'suspended') c.resume(); }
+  async function ready() {
+    const c = ctx(); await c.resume(); const initial = c.currentTime, deadline = performance.now() + 10000;
+    // A newly opened audio device can resolve resume before its clock starts.
+    while (c.currentTime <= initial) {
+      if (performance.now() > deadline || c.state === 'closed') throw Error('Audio device did not start');
+      await U.sleep(20);
+    }
+    return c;
+  }
 
   /* ---- track mixing nodes ---- */
   function trackNode(track, c = ctx(), dest = master) {
@@ -55,10 +64,10 @@ const AudioEngine = (() => {
     }
     return arr;
   }
-  function buildChain(c, clip, track, dest, when, fromLt, durLocal) {
+  function buildChain(c, clip, track, dest, when, fromLt, durLocal, playbackRate = 1) {
     const a = clip.audio; const nodes = [];
     const gain = c.createGain(); nodes.push(gain);
-    const env = envelope(clip, fromLt, fromLt + durLocal, Math.max(2, Math.ceil(durLocal * 25)));
+    const env = envelope(clip, fromLt, fromLt + durLocal * playbackRate, Math.max(2, Math.ceil(durLocal * 25)));
     if (durLocal > 0.02) { try { gain.gain.setValueCurveAtTime(env, when, durLocal); } catch (e) { gain.gain.value = env[0]; } } else gain.gain.value = env[0];
     let last = gain;
     const connect = (n) => { last.connect(n); last = n; nodes.push(n); };
@@ -68,7 +77,7 @@ const AudioEngine = (() => {
     if (a.highpass > 0) { const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = a.highpass; connect(f); }
     if (a.lowpass > 0 && a.lowpass < 20000) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = a.lowpass; connect(f); }
     const pan = c.createStereoPanner(); const pv = KF.has(clip, 'audio.pan') ? KF.value(clip, 'audio.pan', fromLt) : a.pan; pan.pan.value = U.clamp(pv, -1, 1); connect(pan);
-    if (KF.has(clip, 'audio.pan')) { const pe = new Float32Array(Math.max(2, Math.ceil(durLocal * 25))); for (let i = 0; i < pe.length; i++) pe[i] = U.clamp(KF.value(clip, 'audio.pan', fromLt + durLocal * i / (pe.length - 1)), -1, 1); if (durLocal > .02) try { pan.pan.setValueCurveAtTime(pe, when, durLocal); } catch (e) { } }
+    if (KF.has(clip, 'audio.pan')) { const pe = new Float32Array(Math.max(2, Math.ceil(durLocal * 25))); for (let i = 0; i < pe.length; i++) pe[i] = U.clamp(KF.value(clip, 'audio.pan', fromLt + durLocal * playbackRate * i / (pe.length - 1)), -1, 1); if (durLocal > .02) try { pan.pan.setValueCurveAtTime(pe, when, durLocal); } catch (e) { } }
     last.connect(dest);
     return { input: gain, nodes };
   }
@@ -82,7 +91,7 @@ const AudioEngine = (() => {
     const when = ctxT0 + Math.max(0, clip.start - projT0) / r;
     const durLocal = clip.duration - startInClip; if (durLocal <= 0) return null;
     const tn = isLive ? trackNode(track) : trackNode(track, c, dest);
-    const chain = buildChain(c, clip, track, tn.gain, when, startInClip, durLocal / r);
+    const chain = buildChain(c, clip, track, tn.gain, when, startInClip, durLocal / r, r);
     if (m.audioBuffer) {
       const src = c.createBufferSource(); src.buffer = m.audioBuffer; src.playbackRate.value = clip.speed * r;
       src.connect(chain.input);
@@ -146,7 +155,7 @@ const AudioEngine = (() => {
   async function renderOffline(from, to, sampleRate = 48000) {
     const dur = Math.max(.05, to - from);
     const oc = new OfflineAudioContext(2, Math.ceil(dur * sampleRate), sampleRate);
-    const m = oc.createGain(); m.gain.value = 1; m.connect(oc.destination);
+    const m = oc.createGain(); m.gain.value = state.muted ? 0 : state.masterVolume; m.connect(oc.destination);
     let any = false;
     for (const { clip, track } of audioClips()) {
       if (clipEnd(clip) <= from || clip.start >= to) continue;
@@ -172,5 +181,6 @@ const AudioEngine = (() => {
   /* analysis: peak of a clip's audio region -> suggest normalize gain */
   function peakOf(clip) { const m = findMedia(clip.mediaId); if (!m || !m.peaks) return 1; const p = m.peaks; const a = Math.floor(clip.offset * p.pps), b = Math.min(p.data.length, Math.ceil((clip.offset + clip.duration * clip.speed) * p.pps)); let mx = 0; for (let i = a; i < b; i++) if (p.data[i] > mx) mx = p.data[i]; return mx || 1; }
 
-  return { ctx, resume, play, stop, now, isPlaying, reschedule, updateMix, levels, renderOffline, previewMedia, stopPreview, peakOf, envelope, streamDestination };
+  function resetMedia() { stop(); stopPreview(); for (const es of elementSources.values()) { es.el.pause(); es.srcNode.disconnect(); es.el.removeAttribute('src'); es.el.load(); } elementSources.clear(); for (const n of trackNodes.values()) { n.gain.disconnect(); n.pan.disconnect(); } trackNodes.clear(); }
+  return { ctx, resume, ready, play, stop, now, isPlaying, reschedule, updateMix, levels, renderOffline, previewMedia, stopPreview, peakOf, envelope, streamDestination, resetMedia };
 })();

@@ -13,7 +13,7 @@
   Events.on('time:changed', () => { $('#tcCurrent').textContent = U.toTimecode(state.currentTime, state.project.fps); $('#tcTotal').textContent = U.toTimecode(state.duration, state.project.fps); });
   Events.on('project:changed', () => { $('#tcTotal').textContent = U.toTimecode(state.duration, state.project.fps); });
   Events.on('project:resized', () => { Preview.layout(); Player.requestRender(); });
-  Events.on('project:loaded', () => { Timeline.render(); Preview.layout(); Player.seek(state.currentTime); });
+  Events.on('project:loaded', () => { Timeline.render(); Preview.layout(); Player.seek(state.currentTime); Timeline.scrollToTime(state.currentTime); });
   $('#btnPlay').onclick = () => Player.toggle(); $('#btnStart').onclick = () => Player.goStart(); $('#btnEnd').onclick = () => Player.goEnd(); $('#btnPrev').onclick = () => Player.step(-1); $('#btnNext').onclick = () => Player.step(1);
   $('#btnLoop').onclick = () => { state.loop = !state.loop; UI.refreshToolbar(); };
   $('#btnIn').onclick = () => Cmd.setIn(); $('#btnOut').onclick = () => Cmd.setOut(); $('#btnMarker').onclick = () => Cmd.addMarker();

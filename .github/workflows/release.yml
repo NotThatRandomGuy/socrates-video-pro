@@ -10,6 +10,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,27 +31,53 @@ jobs:
         run: Compress-Archive -Path dist/web/* -DestinationPath dist/Socrates-Video-Pro-Web.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Socrates-Video-Pro
+          name: windows-and-web
           path: |
             dist/*.exe
             dist/*Web.zip
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:linux
+      - name: Verify AppImage and Debian package
+        run: |
+          chmod +x dist/*.AppImage
+          cd dist
+          ./Socrates-Video-Pro-*-Linux-x64.AppImage --appimage-extract >/dev/null
+          timeout 90s xvfb-run -a ./squashfs-root/socrates-video-pro --smoke-test
+          sudo apt-get update -qq
+          sudo apt-get install -y ./*.deb
+          timeout 90s xvfb-run -a /opt/Socrates\ Video\ Pro/socrates-video-pro --smoke-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.AppImage
+            dist/*.deb
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: windows
+    needs: [windows, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: Socrates-Video-Pro
           path: dist
-      - name: Publish release
+          merge-multiple: true
+      - name: Prepare draft for local signing
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
-          cd dist
-          sha256sum *.exe *.zip > SHA256SUMS.txt
-          gh release create "$TAG" *.exe *.zip SHA256SUMS.txt --title "Socrates Video Pro $TAG" --generate-notes
+          gh release create "$TAG" dist/*.exe dist/*.zip dist/*.AppImage dist/*.deb --draft --title "Socrates Video Pro $TAG" --notes-file CHANGELOG.md

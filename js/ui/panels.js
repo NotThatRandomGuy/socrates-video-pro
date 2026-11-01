@@ -9,11 +9,13 @@ const UI = (() => {
   function toast(msg, ms = 2600) { let el = U.$('.toast'); if (!el) { el = U.el('div', { class: 'toast' }); document.body.appendChild(el); } el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms); }
 
   /* ---------------- modal dialogs ---------------- */
-  function modal(title, content, buttons = [{ label: 'Close', primary: true }], { width = 460 } = {}) {
+  function modal(title, content, buttons = [{ label: 'Close', primary: true }], { width = 460, signal } = {}) {
     return new Promise(res => {
       const previousFocus = document.activeElement;
       const back = U.el('div', { class: 'modal-back' }); const box = U.el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': title, style: { width: width + 'px' } });
-      const close = (v) => { back.remove(); document.removeEventListener('keydown', kd); previousFocus?.focus(); res(v); };
+      let closed = false;
+      const abort = () => close(null);
+      const close = (v) => { if (closed) return; closed = true; back.remove(); document.removeEventListener('keydown', kd); signal?.removeEventListener('abort', abort); previousFocus?.focus(); res(v); };
       const kd = (e) => {
         if (e.key === 'Escape') { e.preventDefault(); close(null); }
         if (e.key === 'Enter' && !['TEXTAREA', 'BUTTON', 'SELECT'].includes(e.target.tagName)) { const p = buttons.find(b => b.primary); if (p) { e.preventDefault(); e.target.blur(); close(p.value ?? true); } }
@@ -22,6 +24,7 @@ const UI = (() => {
       box.append(U.el('div', { class: 'modal-head' }, U.el('span', {}, title), U.el('button', { class: 'mini', onclick: () => close(null) }, '✕')), U.el('div', { class: 'modal-body' }, content), U.el('div', { class: 'modal-foot' }, buttons.map(b => U.el('button', { class: b.primary ? 'primary' : (b.danger ? 'danger' : ''), onclick: () => close(b.value ?? (b.primary ? true : false)) }, b.label))));
       back.appendChild(box); back.onclick = (e) => { if (e.target === back) close(null); }; document.body.appendChild(back); document.addEventListener('keydown', kd);
       const f = box.querySelector('input,textarea,select'); if (f) { f.focus(); f.select && f.select(); }
+      if (signal?.aborted) close(null); else signal?.addEventListener('abort', abort, { once: true });
     });
   }
   async function prompt(title, value = '', { label = '' } = {}) { const inp = U.el('input', { type: 'text', value, style: { width: '100%' } }); const ok = await modal(title, U.el('div', {}, label ? U.el('label', {}, label) : null, inp), [{ label: 'Cancel' }, { label: 'OK', primary: true }]); return ok ? inp.value : null; }

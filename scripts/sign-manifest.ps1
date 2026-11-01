@@ -1,0 +1,13 @@
+param([string]$Directory = 'dist/release')
+$ErrorActionPreference = 'Stop'
+Import-Module Microsoft.PowerShell.Security
+$root = Split-Path $PSScriptRoot -Parent
+$thumbprint = [IO.File]::ReadAllText((Join-Path $root 'signing/thumbprint.txt')).Trim()
+$certificate = Get-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint"
+$privateKey = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($certificate)
+$manifest = [IO.Path]::GetFullPath((Join-Path $Directory 'SHA256SUMS.txt'))
+try {
+  $signature = $privateKey.SignData([IO.File]::ReadAllBytes($manifest), [Security.Cryptography.HashAlgorithmName]::SHA256, [Security.Cryptography.RSASignaturePadding]::Pkcs1)
+  [IO.File]::WriteAllBytes($manifest + '.sig', $signature)
+} finally { $privateKey.Dispose() }
+Write-Output 'Signed the release checksum manifest with the local certificate.'

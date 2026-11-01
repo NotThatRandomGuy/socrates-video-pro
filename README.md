@@ -1,6 +1,6 @@
 # Socrates Video Pro
 
-A local, multitrack video editor for the web and Windows. Edit, animate, mix, and export on your own machine. The browser app has no runtime dependencies or build step; the optional Windows app bundles Chromium with Electron.
+A local, multitrack video editor for the web, Windows, and Linux. Edit, animate, mix, and export on your own machine. The browser app has no runtime dependencies or build step; the desktop apps bundle Chromium with Electron. See the [1.1.0 changelog](CHANGELOG.md) and [review scope](docs/AUDIT-1.1.0.md).
 
 ![Socrates Video Pro workspace](tests/screenshot.png)
 
@@ -10,11 +10,40 @@ Download the latest files from [Releases](https://github.com/NotThatRandomGuy/so
 
 | Download | How to use it |
 | --- | --- |
-| `Socrates-Video-Pro-1.0.0-Setup-x64.exe` | Windows 10/11, 64-bit. Run the installer, choose a folder, and launch from Start or the desktop shortcut. Uninstall through Windows Settings. |
-| `Socrates-Video-Pro-1.0.0-Portable-x64.exe` | Place in a writable folder and run. No installation is required. Recovery and media cache live in the adjacent `SocratesVideoPro-data` folder; keep that folder with the executable when moving it. |
+| `Socrates-Video-Pro-1.1.0-Setup-x64.exe` | Windows 10/11, 64-bit. Run the installer, choose a folder, and launch from Start or the desktop shortcut. Uninstall through Windows Settings. |
+| `Socrates-Video-Pro-1.1.0-Portable-x64.exe` | Place in a writable folder and run. No installation is required. Recovery and media cache live in the adjacent `SocratesVideoPro-data` folder; keep that folder with the executable when moving it. |
+| `Socrates-Video-Pro-1.1.0-Linux-x64.AppImage` | Linux x86-64, Ubuntu 22.04 or compatible. Make executable and launch; instructions below. |
+| `Socrates-Video-Pro-1.1.0-Linux-x64.deb` | Debian/Ubuntu x86-64. Install with the system package manager; instructions below. |
 | `Socrates-Video-Pro-Web.zip` | Extract and open `index.html` in current Chrome or Edge. You can also serve the extracted files from any static web host. |
 
-The Windows packages are unsigned. Windows may display an unknown-publisher warning. Verify the download source and the release's `SHA256SUMS.txt` before running it. No signing certificate is included in this repository.
+Windows executables are signed locally with a **self-signed** certificate attributed to NotThatRandomGuy. Windows can still show an unknown-publisher warning. The public certificate is included; its non-exportable private key stays on the signing machine. All release downloads are covered by a locally signed checksum list, including Linux packages and the web ZIP. See verification below.
+
+### Linux installation
+
+For AppImage:
+
+```sh
+chmod +x Socrates-Video-Pro-1.1.0-Linux-x64.AppImage
+./Socrates-Video-Pro-1.1.0-Linux-x64.AppImage
+```
+
+If your distribution lacks AppImage's FUSE support, extract and run instead:
+
+```sh
+./Socrates-Video-Pro-1.1.0-Linux-x64.AppImage --appimage-extract
+./squashfs-root/AppRun
+```
+
+For Debian/Ubuntu:
+
+```sh
+sudo apt install ./Socrates-Video-Pro-1.1.0-Linux-x64.deb
+socrates-video-pro
+# To uninstall:
+sudo apt remove socrates-video-pro
+```
+
+Linux keeps recovery and media cache in your user configuration directory (normally `~/.config/Socrates Video Pro`). Keep Chromium's sandbox enabled; launch as your normal user. Wayland screen capture needs a working PipeWire desktop portal. Linux screen recording supports video and microphone capture; system-audio loopback is not provided by this desktop integration. Camera, microphone, codecs, and GPU support depend on your distribution and hardware.
 
 To run the source in a browser, download or clone this repository and open `index.html`. Alternatively, with Node.js 24 installed, run `node scripts/serve.mjs` and open [localhost:8765](http://localhost:8765). Recording requires a secure context: HTTPS, localhost, or the desktop app. Support for file-based recording depends on your browser.
 
@@ -26,7 +55,7 @@ To run the source in a browser, download or clone this repository and open `inde
 4. Click **Crop canvas** above the preview to frame the final output. Drag the corners to resize, drag inside to move, or drag outside to draw a new rectangle. Choose a common ratio or enter exact pixel dimensions. **Apply crop** changes the preview and export dimensions while preserving clip sizes, positions, effects, and keyframes. Reopen the dialog to revise it; **Restore original** reveals the full composition. Cropping is undoable and saved with the project.
 5. Click **Save** to download a `.vep.json` project. Click **Export** for video, or use **File** for PNG frames and WAV audio.
 
-Canvas cropping applies to the whole project. The Inspector's clip crop controls trim an individual source. Changing project resolution or applying a project template clears the canvas crop and resizes the composition. Use **Project size** in Export to retain your crop's aspect ratio; other export sizes stretch to the chosen dimensions. Video dimensions are rounded to even pixels for codec compatibility, while PNG preserves exact dimensions.
+Canvas cropping applies to the whole project. The Inspector's clip crop controls trim an individual source. Changing project resolution or applying a project template clears the canvas crop and resizes the composition. Use **Project size** in Export to retain your crop's aspect ratio; other aspect ratios add margins while preserving the picture's proportions. Video dimensions are rounded to even pixels for codec compatibility, while PNG preserves exact dimensions.
 
 ## Files, recovery, and privacy
 
@@ -99,11 +128,24 @@ npm start           # desktop app
 npm test            # syntax + browser regression suites
 npm run build:web   # static files in dist/web
 npm run build:win   # Windows x64 installer and portable EXE in dist
+npm run build:linux # Linux x64 AppImage and Debian package in dist
 ```
 
-Build Windows packages on Windows. Dependency versions are pinned in `package-lock.json`. The desktop renderer is sandboxed, has no Node access, and requests permission for recording. The installer supports per-user installation and directory selection. See [Electron security](https://www.electronjs.org/docs/latest/tutorial/security) and [Windows packaging](https://www.electron.build/v26/docs/nsis/) for the underlying platform documentation.
+Build Windows packages on Windows and Linux packages on Linux. Dependency versions are pinned in `package-lock.json`. The desktop renderer is sandboxed, has no Node access, and requests permission for recording. The Windows installer supports per-user installation and directory selection. See [Electron security](https://www.electronjs.org/docs/latest/tutorial/security) for the underlying platform documentation.
 
-The [release workflow](.github/workflows/release.yml) tests and packages pushes to `main`, pull requests, and manual runs. Pushing a version tag such as `v1.0.0` creates a GitHub Release containing both EXEs, the web ZIP, and SHA-256 checksums after successful verification. Binaries are release assets rather than Git source files.
+The [release workflow](.github/workflows/release.yml) tests and packages Windows and Linux on pushes to `main`, pull requests, and manual runs. A version tag creates a **draft** release after both platforms pass. The maintainer builds signed Windows packages locally, stages the draft files with `node scripts/release.mjs stage`, signs the manifest with `powershell -File scripts/sign-manifest.ps1`, and publishes with `node scripts/release.mjs publish`. Publishing verifies signatures, checksums, the tag, and successful release checks. Binaries are release assets rather than Git source files.
+
+### Signing and checking downloads
+
+Download all assets into one folder. From this repository, run `node scripts/verify-release.mjs /path/to/downloads` to verify the manifest's RSA/SHA-256 signature and every listed file. Compare the printed certificate fingerprint with this published SHA-256 fingerprint:
+
+```text
+44:C3:F8:0F:45:42:FD:AA:66:C5:D0:D9:90:B1:40:F1:AB:75:32:BD:CA:99:30:43:29:4E:7E:8D:D3:14:FC:C3
+```
+
+You can also verify the detached manifest signature with `openssl dgst -sha256 -verify release-public-key.pem -signature SHA256SUMS.txt.sig SHA256SUMS.txt`, then use `sha256sum -c SHA256SUMS.txt` on Linux. Obtain the public key from this repository or compare the certificate fingerprint independently; a signature checked against an unverified replacement key cannot authenticate a download. Windows file Properties → Digital Signatures shows the embedded executable signature. Self-signing does not provide a publicly trusted publisher or timestamp. Do not install this certificate as a trusted root to hide warnings.
+
+Maintainers can create their own local certificate with `powershell -File scripts/create-signing-certificate.ps1`, then run `npm run build:win:signed`. This changes the public signing identity; update the published fingerprint for your own distribution. No private key belongs in GitHub or release assets.
 
 ## Tests
 
@@ -112,6 +154,7 @@ node tests/smoke.mjs      # boots the app headless in Chrome, exercises engine +
 node tests/interact.mjs   # mouse/keyboard interaction tests (drag, trim, snap, marquee, gizmo, menus)
 node tests/fileproto.mjs  # verifies file:// operation (direct double-click of index.html)
 node tests/canvas.mjs     # crop pixels, save/load, undo, snapping, dialogs, cropped export
+node tests/audit.mjs      # project safety, editing, audio, GPU, recording and export regressions
 node tests/screenshot.mjs # renders a populated project → tests/screenshot.png
 ```
 

@@ -189,6 +189,7 @@ const Timeline = (() => {
   /* ---------------- tracks mouse: select / move / trim / razor / marquee ---------------- */
   function trackAtY(y) { let acc = 0; for (const tr of displayTracks()) { const h = trackH(tr); if (y >= acc && y < acc + h) return tr; acc += h; } return null; }
   function onTracksDown(e) {
+    if (e.button === 1) { startPan(e); return; }
     if (e.button !== 0) return;
     const cEl = e.target.closest('.clip'); const t = x2t(localX(e));
     if (state.tool === 'razor') { if (cEl) { const c = findClip(cEl.dataset.id); Cmd.splitAt(snapT(t), [c.id, ...Cmd.linkedOf(c).map(l => l.id)]); } e.preventDefault(); return; }
@@ -202,7 +203,7 @@ const Timeline = (() => {
     const isHandle = e.target.classList.contains('handle'); const mode = isHandle ? (e.target.classList.contains('left') ? 'trimL' : 'trimR') : 'move';
     // selected clips on unlocked tracks participate
     const clips = selectedClips().filter(c => !findTrackOfClip(c.id).locked);
-    const items = clips.map(c => ({ c, start: c.start, dur: c.duration, offset: c.offset, track: findTrackOfClip(c.id), trackIdx: displayTracks().indexOf(findTrackOfClip(c.id)) }));
+    const items = clips.map(c => ({ c, start: c.start, dur: c.duration, offset: c.offset, keys: U.deepClone(c.keyframes), track: findTrackOfClip(c.id), trackIdx: displayTracks().indexOf(findTrackOfClip(c.id)) }));
     drag = { mode, x0: e.clientX, y0: e.clientY, items, primary: clip, moved: false, exclude: new Set(clips.map(c => c.id)), altCopy: e.altKey && mode === 'move' };
     History.begin(mode === 'move' ? 'Move clips' : 'Trim');
     const mv = (ev) => onDragMove(ev), up = (ev) => onDragEnd(ev, mv, up);
@@ -235,6 +236,7 @@ const Timeline = (() => {
     } else {
       const it = drag.items.find(i => i.c === drag.primary); const c = it.c;
       const linked = drag.items.filter(i => i !== it);
+      for (const item of drag.items) item.c.keyframes = U.deepClone(item.keys);
       if (drag.mode === 'trimL') { const ns = snapInfo(it.start + dt, state.snap && !e.altKey, drag.exclude); c.start = it.start; c.duration = it.dur; c.offset = it.offset; Cmd.trimLeft(c, ns.t); ns.snapped ? showSnap(c.start) : hideSnap(); linked.forEach(l => { if (Math.abs(l.start - it.start) < .02) { l.c.start = l.start; l.c.duration = l.dur; l.c.offset = l.offset; Cmd.trimLeft(l.c, c.start); } }); }
       else { const ne = snapInfo(it.start + it.dur + dt, state.snap && !e.altKey, drag.exclude); c.duration = it.dur; Cmd.trimRight(c, ne.t); ne.snapped ? showSnap(clipEnd(c)) : hideSnap(); linked.forEach(l => { if (Math.abs((l.start + l.dur) - (it.start + it.dur)) < .02) { l.c.duration = l.dur; Cmd.trimRight(l.c, clipEnd(c)); } }); }
       renderClipsLive(); Events.emit('clip:live');
@@ -280,7 +282,7 @@ const Timeline = (() => {
     if (mediaId) { await Cmd.addMedia(mediaId, { trackId: track ? track.id : null, start: t }); return; }
     if (fxType && cEl) { Cmd.addEffect([cEl.dataset.id], fxType); Cmd.select(cEl.dataset.id); return; }
     if (transType && cEl) { const c = findClip(cEl.dataset.id); const rel = (x2t(localX(e)) - c.start) / c.duration; Cmd.setTransition([c.id], rel < .5 ? 'in' : 'out', transType, .6); return; }
-    if (gen) { const g = JSON.parse(gen); Cmd.addGenerated(g.kind, g.over || {}, { start: t, duration: g.duration || 5, name: g.name }); return; }
+    if (gen) { let g; try { g = JSON.parse(gen); } catch { return UI.toast('Invalid dragged item'); } if (!CLIP_KINDS.includes(g.kind)) return; Cmd.addGenerated(g.kind, g.over || {}, { start: t, duration: g.duration || 5, name: g.name }); return; }
     const files = Array.from(e.dataTransfer.files || []); if (files.length) { const added = await Media.importFiles(files); let st = t; for (const m of added) { const c = await Cmd.addMedia(m.id, { trackId: track ? track.id : null, start: st }); if (c) st = clipEnd(c); } }
   }
 

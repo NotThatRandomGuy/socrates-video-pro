@@ -79,7 +79,7 @@ const GLFX = (() => {
       ['u_tex', 'u_tex2', 'u_lut', 'u_res', 'u_type', 'u_p', 'u_color', 'u_time', 'u_lutSize', 'u_dir', 'u_w', 'u_flip'].forEach(n => loc[n] = gl.getUniformLocation(prog, n));
       quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
       const a = gl.getAttribLocation(prog, 'a_pos'); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
-      texSrc = mkTex(); for (let i = 0; i < 3; i++) { const t = mkTex(); const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0); fbs.push({ fb, tex: t, w: 0, h: 0 }); }
+      texSrc = mkTex(); for (let i = 0; i < 4; i++) { const t = mkTex(); const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0); fbs.push({ fb, tex: t, w: 0, h: 0 }); }
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.uniform1i(loc.u_tex, 0); gl.uniform1i(loc.u_tex2, 1); gl.uniform1i(loc.u_lut, 2);
       gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
@@ -93,21 +93,22 @@ const GLFX = (() => {
   const P = new Float32Array(16), W = new Float32Array(13);
   function setP(arr) { P.fill(0); arr.forEach((v, i) => P[i] = +v || 0); gl.uniform1fv(loc.u_p, P); }
   function pass(type, srcTex, dst, w, h, extra = {}) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fb : null); if (dst) sizeFb(dst, w, h);
+    gl.activeTexture(gl.TEXTURE0); gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fb : null); if (dst) sizeFb(dst, w, h);
     gl.viewport(0, 0, w, h); gl.uniform1i(loc.u_type, type); gl.uniform2f(loc.u_res, w, h); gl.uniform1f(loc.u_flip, dst ? 0 : 1);
     gl.uniform2f(loc.u_dir, extra.dir ? extra.dir[0] : 0, extra.dir ? extra.dir[1] : 0);
     if (extra.color) { const [r, g, b] = U.hexToRgb(extra.color); gl.uniform3f(loc.u_color, r / 255, g / 255, b / 255); }
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, srcTex);
-    if (extra.tex2) { gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, extra.tex2); }
-    if (extra.lut) { gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, extra.lut.tex); gl.uniform1f(loc.u_lutSize, extra.lut.size); }
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, extra.tex2 || texSrc);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, extra.lut?.tex || texSrc);
+    if (extra.lut) gl.uniform1f(loc.u_lutSize, extra.lut.size);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
   function gaussWeights(sigma) { let sum = 0; for (let i = 0; i <= 6; i++) { W[i] = Math.exp(-(i * i) / (2 * sigma * sigma)); sum += i ? 2 * W[i] : W[i]; } for (let i = 0; i <= 6; i++) W[i] /= sum; gl.uniform1fv(loc.u_w, W); }
-  function blur(radius, src, a, b, w, h) {
+  function blur(radius, src, a, b, w, h, preserve = null) {
     // returns fb holding result; iterative separable gaussian
     let cur = src, iters = Math.max(1, Math.ceil(radius / 12)), r = radius / iters, step = Math.max(1, r / 6);
     gaussWeights(Math.max(.5, r / 2.2)); setP([step]);
-    for (let i = 0; i < iters; i++) { pass(T.BLUR, cur, a, w, h, { dir: [1, 0] }); pass(T.BLUR, a.tex, b, w, h, { dir: [0, 1] }); cur = b.tex;[a, b] = [b, a]; }
+    for (let i = 0; i < iters; i++) { [a, b] = fbs.filter(f => f.tex !== cur && f.tex !== preserve); pass(T.BLUR, cur, a, w, h, { dir: [1, 0] }); pass(T.BLUR, a.tex, b, w, h, { dir: [0, 1] }); cur = b.tex; }
     return cur;
   }
 
@@ -123,6 +124,7 @@ const GLFX = (() => {
     let cur = texSrc; let [A, B, C] = fbs; const swap = () => { [A, B] = [B, A]; };
     const steps = fxList.filter(f => f && f.type !== 'dropshadow');
     for (const f of steps) {
+      [A, B, C] = fbs.filter(fb => fb.tex !== cur);
       const p = f.p || {};
       switch (f.type) {
         case 'color': setP([p.exposure, p.brightness, p.contrast, p.saturation, p.vibrance, p.temperature, p.tint, p.hue, p.highlights, p.shadows, p.gamma ?? 1]); pass(T.COLOR, cur, A, w, h); cur = A.tex; swap(); break;
@@ -145,7 +147,7 @@ const GLFX = (() => {
         case 'mask': setP([p.shape, p.x, p.y, p.w, p.h, p.feather, p.rotation, p.invert]); pass(T.MASK, cur, A, w, h); cur = A.tex; swap(); break;
         case 'blur': if (p.radius > 0) { cur = blur(p.radius * scale, cur, A, B, w, h); swap(); } break;
         case 'sharpen': setP([p.amount]); pass(T.SHARPEN, cur, A, w, h); cur = A.tex; swap(); break;
-        case 'glow': { setP([p.threshold]); pass(T.THRESHOLD, cur, C, w, h); const g = blur(Math.max(1, p.radius * scale), C.tex, A, B, w, h); if (g !== C.tex) { /* copy into C */ pass(T.COPY, g, C, w, h); } setP([p.amount]); pass(T.ADD, cur, A, w, h, { tex2: C.tex }); cur = A.tex; swap(); break; }
+        case 'glow': { setP([p.threshold]); pass(T.THRESHOLD, cur, C, w, h); const g = blur(Math.max(1, p.radius * scale), C.tex, A, B, w, h, cur); const target = fbs.find(fb => fb.tex !== cur && fb.tex !== g); setP([p.amount]); pass(T.ADD, cur, target, w, h, { tex2: g }); cur = target.tex; break; }
       }
     }
     pass(T.COPY, cur, null, w, h);
@@ -158,7 +160,7 @@ const GLFX = (() => {
     if (!ok && !init()) return null;
     let size = 0; const vals = [];
     for (const line of text.split(/\r?\n/)) { const l = line.trim(); if (!l || l.startsWith('#') || l.startsWith('TITLE') || l.startsWith('DOMAIN')) continue; if (l.startsWith('LUT_3D_SIZE')) { size = parseInt(l.split(/\s+/)[1]); continue; } if (l.startsWith('LUT_1D_SIZE')) return null; const p = l.split(/\s+/).map(Number); if (p.length >= 3 && !p.some(isNaN)) vals.push(p[0], p[1], p[2]); }
-    if (!size || vals.length < size * size * size * 3) return null;
+    if (!Number.isInteger(size) || size < 2 || size > 64 || vals.length < size * size * size * 3 || vals.some(v => !Number.isFinite(v))) return null;
     const data = new Uint8Array(size * size * size * 4);
     // cube order: r fastest, then g, then b. layout: x = b*size + r, y = g
     for (let b = 0; b < size; b++) for (let g = 0; g < size; g++) for (let r = 0; r < size; r++) { const si = ((b * size + g) * size + r) * 3; const di = ((g) * size * size + (b * size + r)) * 4; data[di] = U.clamp(vals[si] * 255, 0, 255); data[di + 1] = U.clamp(vals[si + 1] * 255, 0, 255); data[di + 2] = U.clamp(vals[si + 2] * 255, 0, 255); data[di + 3] = 255; }
@@ -168,5 +170,6 @@ const GLFX = (() => {
     const rec = { size, tex }; lutTextures.set(id, rec); return rec;
   }
 
-  return { process, loadLUT, get available() { return ok || init(); } };
+  function clearLUT(id) { const lut = lutTextures.get(id); if (lut && gl) gl.deleteTexture(lut.tex); lutTextures.delete(id); }
+  return { process, loadLUT, clearLUT, get available() { return ok || init(); } };
 })();

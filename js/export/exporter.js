@@ -75,79 +75,105 @@ const Exporter = (() => {
     };
   }
 
-  /* wait until all active video clips are seeked to the frame's time */
+  let busy = false;
+  function validate(o) {
+    if (!o || !['width','height','fps','bitrate','from','to'].every(k => Number.isFinite(o[k]))) throw Error('Export settings must be valid numbers');
+    if (o.width < 2 || o.height < 2 || o.width > 8192 || o.height > 8192 || o.fps < 1 || o.fps > 120 || o.bitrate <= 0 || o.from < 0 || o.to <= o.from || o.to > state.duration + .001) throw Error('Invalid export size, rate, or time range');
+    if (!Number.isInteger(o.width) || !Number.isInteger(o.height)) throw Error('Export dimensions must be whole numbers');
+    if (o.audio && (!Number.isFinite(o.audioBitrate) || o.audioBitrate <= 0)) throw Error('Invalid audio bitrate');
+    if (!o.format || !FORMATS.some(f => f.id === o.format.id)) throw Error('Unknown export format');
+  }
+  async function guarded(o, task) {
+    if (busy) { UI.toast('An export is already in progress'); return false; }
+    try { validate(o); } catch (e) { UI.toast(e.message); return false; }
+    busy = true; state.exporting = 'webcodecs'; cancelFlag = false; Player.pause(); AudioEngine.stopPreview();
+    const time = state.currentTime, loop = state.loop; state.loop = false;
+    try { return await task({ ...o }); }
+    catch (e) { UI.toast(e.message === 'cancelled' ? 'Export cancelled' : 'Export failed: ' + e.message, 6000); return false; }
+    finally { Player.pause(); state.loop = loop; state.exporting = false; busy = false; Player.seek(time); }
+  }
+  function checkCancel(error) { if (cancelFlag) throw Error('cancelled'); if (error) throw error; }
+  async function waitQueue(encoder, limit, error) {
+    const started = performance.now();
+    while (encoder.encodeQueueSize > limit) { checkCancel(error()); if (performance.now() - started > 15000) throw Error('Encoder stopped responding'); await U.sleep(5); }
+    checkCancel(error());
+  }
   async function seekAll(t) {
-    const waits = [];
-    for (const tr of videoTracks()) { if (tr.hidden) continue; for (const c of tr.clips) { if (c.kind !== 'video' || !c.enabled) continue; if (t < c.start - .01 || t >= clipEnd(c) + 1.5) continue; const el = Media.clipVideo(c); if (!el) continue; const want = Math.max(0, c.offset + (t - c.start) * c.speed); if (el.readyState < 1) waits.push(new Promise(r => { el.addEventListener('loadedmetadata', r, { once: true }); setTimeout(r, 3000); })); if (Math.abs(el.currentTime - want) > .0005) { waits.push(new Promise(r => { const done = () => { el.removeEventListener('seeked', done); r(); }; el.addEventListener('seeked', done); setTimeout(done, 2500); el.currentTime = Math.min(want, (el.duration || want) - .0001); })); } } }
-    if (waits.length) await Promise.all(waits);
+    const solo = videoTracks().some(tr => tr.solo);
+    await Promise.all(videoTracks().filter(tr => !tr.hidden && (!solo || tr.solo)).flatMap(tr => tr.clips).filter(c => c.kind === 'video' && c.enabled && t >= c.start - .01 && t < clipEnd(c) + 1.5).map(async c => {
+      const el = Media.clipVideo(c); if (!el) throw Error('Missing media: ' + c.name);
+      if (el.readyState < 1) await new Promise((resolve, reject) => {
+        const finish = error => { clearTimeout(timer); el.removeEventListener('loadedmetadata', ready); el.removeEventListener('error', failed); error ? reject(error) : resolve(); };
+        const ready = () => finish(), failed = () => finish(Error('Cannot decode ' + c.name));
+        const timer = setTimeout(failed, 8000); el.addEventListener('loadedmetadata', ready, { once: true }); el.addEventListener('error', failed, { once: true });
+      });
+      const want = Math.max(0, Math.min(c.offset + (t - c.start) * c.speed, Number.isFinite(el.duration) ? Math.max(0, el.duration - .001) : Infinity));
+      if (Math.abs(el.currentTime - want) <= .0005 && el.readyState >= 2 && !el.seeking) return;
+      await new Promise((resolve, reject) => {
+        const finish = error => { clearTimeout(timer); el.removeEventListener('seeked', ready); el.removeEventListener('loadeddata', ready); el.removeEventListener('error', failed); error ? reject(error) : resolve(); };
+        const ready = () => { if (el.readyState >= 2 && !el.seeking) finish(); }, failed = () => finish(Error('Could not seek ' + c.name));
+        const timer = setTimeout(failed, 8000); el.addEventListener('seeked', ready); el.addEventListener('loadeddata', ready); el.addEventListener('error', failed, { once: true }); el.currentTime = want; ready();
+      });
+    }));
   }
-
-  /* ---------------- WebCodecs export ---------------- */
-  async function exportWebCodecs(o) {
-    cancelFlag = false; Player.pause(); AudioEngine.stopPreview();
-    const P = state.project; const dur = o.to - o.from; const total = Math.ceil(dur * o.fps);
-    const vcfg = await pickCodec(o.format, o.width, o.height, o.fps, o.bitrate);
-    if (!vcfg) { UI.toast(`${o.format.label} not supported by this browser — falling back to VP9/WebM`); o.format = FORMATS[1]; const alt = await pickCodec(o.format, o.width, o.height, o.fps, o.bitrate); if (!alt) return exportRealtime(o); return exportWebCodecs(o); }
-    const ui = progressUI(total);
-    // audio prep
-    let acfg = null, audioBuf = null;
-    if (o.audio) { try { audioBuf = await AudioEngine.renderOffline(o.from, o.to, 48000); acfg = await pickAudioCodec(o.format.audio, 48000, 2, o.audioBitrate); } catch (e) { console.warn('audio render', e); } }
-    const audioInfo = acfg ? { codec: acfg.codec.startsWith('mp4a') ? 'aac' : 'opus', sampleRate: 48000, channels: 2 } : null;
-    const mux = o.format.container === 'mp4' ? new MP4Muxer({ width: o.width, height: o.height, fps: o.fps, audio: audioInfo }) : new WebMMuxer({ width: o.width, height: o.height, fps: o.fps, videoCodec: o.format.webmCodec, audio: audioInfo ? { codec: 'A_OPUS', sampleRate: 48000, channels: 2 } : null, duration: dur });
-    let encErr = null;
-    const venc = new VideoEncoder({ output: (chunk, meta) => mux.addVideo(chunk, meta), error: (e) => { encErr = e; } });
-    venc.configure(vcfg);
-    // canvas at output resolution
-    const cv = document.createElement('canvas'); cv.width = o.width; cv.height = o.height; const ctx = cv.getContext('2d', { willReadFrequently: false });
-    const sx = o.width / P.width, sy = o.height / P.height; const s = Math.min(sx, sy); const ox = (o.width - P.width * s) / 2, oy = (o.height - P.height * s) / 2;
-    const savedT = state.currentTime; const keyInt = Math.round(o.fps * 2);
+  function outputCanvas(o) {
+    const cv = document.createElement('canvas'); cv.width = o.width; cv.height = o.height;
+    const ctx = cv.getContext('2d'), p = state.project, scale = Math.min(o.width / p.width, o.height / p.height);
+    const draw = t => { ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle = p.background; ctx.fillRect(0,0,o.width,o.height); ctx.setTransform(scale,0,0,scale,(o.width-p.width*scale)/2,(o.height-p.height*scale)/2); Compositor.renderFrame(ctx,t); };
+    return { cv, draw };
+  }
+  function exportWebCodecs(o) { return guarded(o, runWebCodecs); }
+  async function runWebCodecs(o) {
+    let vcfg = await pickCodec(o.format, o.width, o.height, o.fps, o.bitrate);
+    if (!vcfg) { UI.toast('Selected encoder unavailable; using WebM'); o.format = FORMATS[1]; vcfg = await pickCodec(o.format, o.width, o.height, o.fps, o.bitrate); if (!vcfg) return runRealtime(o); }
+    const dur = o.to-o.from, total = Math.ceil(dur*o.fps), ui = progressUI(total);
+    let venc, aenc, error = null;
     try {
-      for (let i = 0; i < total; i++) {
-        if (cancelFlag) throw new Error('cancelled'); if (encErr) throw encErr;
-        const t = o.from + i / o.fps; state.currentTime = t;
-        await seekAll(t);
-        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = P.background; ctx.fillRect(0, 0, o.width, o.height); ctx.setTransform(s, 0, 0, s, ox, oy);
-        Compositor.renderFrame(ctx, t);
-        const frame = new VideoFrame(cv, { timestamp: Math.round(i * 1e6 / o.fps), duration: Math.round(1e6 / o.fps) });
-        venc.encode(frame, { keyFrame: i % keyInt === 0 }); frame.close();
-        while (venc.encodeQueueSize > 4) await U.sleep(2);
-        if (i % 5 === 0) { ui.set(i); if (i % 15 === 0) ui.thumb(cv); await U.nextFrame(); }
+      let audioBuf, acfg;
+      if (o.audio) { audioBuf = await AudioEngine.renderOffline(o.from,o.to,48000); acfg = await pickAudioCodec(o.format.audio,48000,2,o.audioBitrate); if (!acfg) throw Error('Audio encoder unavailable. Choose WebM or export WAV audio separately.'); }
+      checkCancel(error);
+      const audioInfo = acfg ? {codec:acfg.codec.startsWith('mp4a')?'aac':'opus', sampleRate:48000, channels:2} : null;
+      const mux = o.format.container === 'mp4' ? new MP4Muxer({width:o.width,height:o.height,fps:o.fps,audio:audioInfo}) : new WebMMuxer({width:o.width,height:o.height,fps:o.fps,videoCodec:o.format.webmCodec,audio:audioInfo?{codec:'A_OPUS',sampleRate:48000,channels:2}:null,duration:dur});
+      venc = new VideoEncoder({output:(chunk,meta)=>mux.addVideo(chunk,meta),error:e=>error=e}); venc.configure(vcfg);
+      const {cv,draw} = outputCanvas(o);
+      for (let i=0;i<total;i++) {
+        checkCancel(error); const t=o.from+i/o.fps; await seekAll(t); draw(t);
+        const frame = new VideoFrame(cv,{timestamp:Math.round(i*1e6/o.fps),duration:Math.round(1e6/o.fps)});
+        try { venc.encode(frame,{keyFrame:i%Math.max(1,Math.round(o.fps*2))===0}); } finally { frame.close(); }
+        await waitQueue(venc,4,()=>error);
+        if(i%5===0){ui.set(i);if(i%15===0)ui.thumb(cv);await U.nextFrame();}
       }
-      ui.set(total, 'Finishing video…'); await venc.flush(); venc.close();
-      if (acfg && audioBuf) {
-        ui.set(total, 'Encoding audio…');
-        const aenc = new AudioEncoder({ output: (chunk, meta) => mux.addAudio(chunk, meta), error: (e) => console.warn('aenc', e) }); aenc.configure(acfg);
-        const frames = acfg.codec === 'opus' ? 960 : 1024; const L = audioBuf.getChannelData(0), R = audioBuf.numberOfChannels > 1 ? audioBuf.getChannelData(1) : L; const n = audioBuf.length;
-        for (let p = 0; p < n; p += frames) {
-          const len = Math.min(frames, n - p); const data = new Float32Array(frames * 2); data.set(L.subarray(p, p + len), 0); data.set(R.subarray(p, p + len), frames);
-          const ad = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: frames, numberOfChannels: 2, timestamp: Math.round(p / 48000 * 1e6), data }); aenc.encode(ad); ad.close();
-          if (aenc.encodeQueueSize > 20) await U.sleep(1);
+      await venc.flush(); checkCancel(error);
+      if(acfg&&audioBuf){
+        ui.set(total,'Encoding audio…');aenc=new AudioEncoder({output:(chunk,meta)=>mux.addAudio(chunk,meta),error:e=>error=e});aenc.configure(acfg);
+        const frames=acfg.codec==='opus'?960:1024,L=audioBuf.getChannelData(0),R=audioBuf.numberOfChannels>1?audioBuf.getChannelData(1):L;
+        for(let p=0;p<audioBuf.length;p+=frames){
+          checkCancel(error);const len=Math.min(frames,audioBuf.length-p),data=new Float32Array(len*2);data.set(L.subarray(p,p+len));data.set(R.subarray(p,p+len),len);
+          const ad=new AudioData({format:'f32-planar',sampleRate:48000,numberOfFrames:len,numberOfChannels:2,timestamp:Math.round(p/48000*1e6),data});
+          try{aenc.encode(ad);}finally{ad.close();}await waitQueue(aenc,20,()=>error);
         }
-        await aenc.flush(); aenc.close();
+        await aenc.flush();checkCancel(error);
       }
-      ui.set(total, 'Writing file…'); await U.nextFrame();
-      const blob = mux.finalize(); U.download(blob, `${o.name}.${o.format.ext}`);
-      UI.toast(`Exported ${o.name}.${o.format.ext} (${U.fmtBytes(blob.size)})`, 5000);
-    } catch (e) {
-      if (e.message !== 'cancelled') { console.error(e); UI.alert('Export failed', U.esc(e.message || String(e))); } else UI.toast('Export cancelled');
-      try { venc.close(); } catch (_) { }
-    } finally { ui.close(); state.currentTime = savedT; Player.seek(savedT); }
+      ui.set(total,'Writing file…');await U.nextFrame();checkCancel(error);const blob=mux.finalize();U.download(blob,o.name+'.'+o.format.ext);UI.toast('Exported '+o.name+'.'+o.format.ext);return true;
+    } finally { for(const encoder of [venc,aenc]) if(encoder&&encoder.state!=='closed') encoder.close();ui.close(); }
   }
-
-  /* ---------------- MediaRecorder fallback (real-time) ---------------- */
-  async function exportRealtime(o) {
-    cancelFlag = false; Player.pause(); const P = state.project; const dur = o.to - o.from;
-    const cv = document.createElement('canvas'); cv.width = o.width; cv.height = o.height; const ctx = cv.getContext('2d'); const s = Math.min(o.width / P.width, o.height / P.height); const ox = (o.width - P.width * s) / 2, oy = (o.height - P.height * s) / 2;
-    const stream = cv.captureStream(o.fps); const dest = AudioEngine.streamDestination(); if (o.audio) dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
-    const mime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
-    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: o.bitrate, audioBitsPerSecond: o.audioBitrate }); const chunks = []; rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-    const ui = progressUI(Math.ceil(dur * o.fps)); const done = new Promise(r => rec.onstop = r);
-    rec.start(250); Player.seek(o.from); Player.play(1);
-    const t0 = performance.now(); let frames = 0;
-    await new Promise(resolve => { const loop = () => { if (cancelFlag || !state.playing || state.currentTime >= o.to - .001) return resolve(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = P.background; ctx.fillRect(0, 0, o.width, o.height); ctx.setTransform(s, 0, 0, s, ox, oy); Compositor.renderFrame(ctx, state.currentTime); frames++; if (frames % 10 === 0) { ui.set(Math.round((state.currentTime - o.from) * o.fps)); ui.thumb(cv); } requestAnimationFrame(loop); }; loop(); });
-    Player.pause(); rec.stop(); await done; ui.close();
-    if (cancelFlag) return UI.toast('Export cancelled');
-    const blob = new Blob(chunks, { type: 'video/webm' }); U.download(blob, `${o.name}.webm`); UI.toast(`Exported ${o.name}.webm (${U.fmtBytes(blob.size)})`);
+  function exportRealtime(o) { return guarded(o,runRealtime); }
+  async function runRealtime(o) {
+    state.exporting = 'realtime';
+    const {cv,draw}=outputCanvas(o), dur=o.to-o.from, ui=progressUI(Math.ceil(dur*o.fps));let stream,rec;
+    try{
+      await seekAll(o.from);draw(o.from);stream=cv.captureStream(0);
+      if(o.audio){await AudioEngine.ready();AudioEngine.streamDestination().stream.getAudioTracks().forEach(t=>stream.addTrack(t.clone()));}
+      const mime=['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported(m));if(!mime)throw Error('WebM recording is unavailable');
+      rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:o.bitrate,audioBitsPerSecond:o.audioBitrate});const chunks=[];let error;
+      rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};const stopped=new Promise(resolve=>{rec.onstop=resolve;rec.onerror=e=>{error=e.error||Error('Recording failed');resolve();};});
+      let started=false;rec.onstart=()=>started=true;rec.start(100);const deadline=performance.now()+10000;
+      while(!started){checkCancel(error);if(performance.now()>deadline)throw Error('Video recorder did not start');stream.getVideoTracks()[0].requestFrame();await U.sleep(20);}
+      Player.seek(o.from);Player.play(1,[o.from,o.to]);let frames=0;
+      while(state.playing&&state.currentTime<o.to){checkCancel(error);draw(state.currentTime);stream.getVideoTracks()[0].requestFrame();if(++frames%10===0){ui.set(Math.round((state.currentTime-o.from)*o.fps));ui.thumb(cv);}await U.sleep(1000/o.fps);}
+      Player.pause();if(rec.state!=='inactive')rec.stop();await stopped;checkCancel(error);if(!chunks.length)throw Error('No video was recorded');
+      U.download(new Blob(chunks,{type:'video/webm'}),o.name+'.webm');UI.toast('Exported '+o.name+'.webm');return true;
+    }finally{if(rec&&rec.state!=='inactive')rec.stop();stream?.getTracks().forEach(t=>t.stop());ui.close();}
   }
 
   /* ---------------- WAV ---------------- */

@@ -28,6 +28,7 @@ const Compositor = (() => {
   function renderFrame(ctx, t, opts = {}) {
     const P = state.project, W = P.canvasCrop?.sourceWidth || P.width, H = P.canvasCrop?.sourceHeight || P.height;
     ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, opts.uncropped ? W : P.width, opts.uncropped ? H : P.height); ctx.clip();
     if (P.canvasCrop && !opts.uncropped) ctx.translate(-P.canvasCrop.x, -P.canvasCrop.y);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.filter = 'none';
     ctx.fillStyle = P.background || '#000'; ctx.fillRect(0, 0, W, H);
@@ -154,7 +155,9 @@ const Compositor = (() => {
     }
     return out;
   }
-  function registerLUT(name, text) { lutStore.set(name, text); }
+  function registerLUT(name, text) { GLFX.clearLUT(name); lutStore.set(name, text); }
+  function exportLUTs() { return Object.fromEntries(lutStore); }
+  function restoreLUTs(luts) { for (const name of lutStore.keys()) GLFX.clearLUT(name); lutStore.clear(); if (luts && !Array.isArray(luts)) for (const [name, text] of Object.entries(luts)) if (typeof text === 'string') registerLUT(name, text); }
   function lutNames() { return [...lutStore.keys()]; }
 
   /* ---------- source acquisition ---------- */
@@ -175,7 +178,7 @@ const Compositor = (() => {
     const e = evalClip(clip, t);
     const tm = transMods(trans, W, H), mm = motionMods(clip, e.lt, W, H);
     const alpha = e.opacity * tm.alpha * mm.alpha; if (alpha <= 0) return;
-    if (clip.kind === 'adjustment') { drawAdjustment(ctx, clip, e, W, H, alpha); return; }
+    if (clip.kind === 'adjustment') { drawAdjustment(ctx, clip, e, W, H, alpha, t); return; }
     const src = clipSource(clip, t, e, W, H); if (!src) return;
     let img = src.img, iw = src.w, ih = src.h;
     // effects (GPU)
@@ -209,10 +212,10 @@ const Compositor = (() => {
   function roundRectPath(ctx, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 
   const adjCanvas = off();
-  function drawAdjustment(ctx, clip, e, W, H, alpha) {
+  function drawAdjustment(ctx, clip, e, W, H, alpha, t) {
     const fx = resolveEffects(clip, e.lt).filter(f => f.type !== 'dropshadow'); if (!fx.length || !GLFX.available) return;
     const cw = ctx.canvas.width, ch = ctx.canvas.height;
-    const out = GLFX.process(ctx.canvas, cw, ch, fx, state.currentTime); if (!out) return;
+    const out = GLFX.process(ctx.canvas, cw, ch, fx, t); if (!out) return;
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = alpha; ctx.globalCompositeOperation = 'source-over';
     // draw processed result back over the whole canvas (mask effect leaves alpha holes, revealing the original beneath)
     ctx.drawImage(out, 0, 0, cw, ch); ctx.restore();
@@ -418,5 +421,5 @@ const Compositor = (() => {
     return { render };
   })();
 
-  return { renderFrame, drawClip, clipBounds, hitTest, clearCaches, registerLUT, lutNames, TextRenderer, ShapeRenderer, StickerRenderer, resolveEffects, roundRectPath };
+  return { renderFrame, drawClip, clipBounds, hitTest, clearCaches, registerLUT, lutNames, exportLUTs, restoreLUTs, TextRenderer, ShapeRenderer, StickerRenderer, resolveEffects, roundRectPath };
 })();

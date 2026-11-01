@@ -163,7 +163,7 @@ const state = {
 ============================================================ */
 const History = (() => {
   const undo = [], redo = []; const MAX = 200; let pending = null;
-  const snap = () => ({ project: JSON.stringify(state.project), sel: [...state.selection] });
+  const snap = () => ({ project: JSON.stringify(state.project, (key, value) => { if (typeof value === 'number' && !Number.isFinite(value)) throw Error('Project values must be finite'); return value; }), sel: [...state.selection] });
   const restore = (s) => {
     state.project = JSON.parse(s.project); state.selection = new Set(s.sel.filter(id => findClip(id)));
     Events.emit('project:changed'); Events.emit('selection:changed');
@@ -179,6 +179,7 @@ const History = (() => {
     },
     push(label) { this.begin(label); }, // alias: call before mutation, then commit()
     cancel() { pending = null; },
+    abort() { const previous = pending; pending = null; if (previous) restore(previous); },
     undo() { if (!undo.length) return; redo.push(snap()); restore(undo.pop()); Events.emit('history:changed'); state.dirty = true; },
     redo() { if (!redo.length) return; undo.push(snap()); restore(redo.pop()); Events.emit('history:changed'); state.dirty = true; },
     canUndo: () => undo.length > 0, canRedo: () => redo.length > 0,
@@ -189,10 +190,8 @@ const History = (() => {
 /* mutate helper: wraps a mutation into a single undoable step and refreshes UI */
 function mutate(label, fn) {
   History.begin(label);
-  const r = fn();
-  History.commit(label);
-  Events.emit('project:changed');
-  return r;
+  try { const r = fn(); History.commit(label); Events.emit('project:changed'); return r; }
+  catch (error) { History.abort(); throw error; }
 }
 
 /* ============================================================

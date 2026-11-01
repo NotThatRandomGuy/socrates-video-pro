@@ -1,7 +1,7 @@
 {
   "name": "socrates-video-pro",
-  "version": "1.0.0",
-  "description": "A private, local video editing studio for the web and Windows",
+  "version": "1.1.0",
+  "description": "A private, local video editing studio for the web, Windows, and Linux",
   "author": "NotThatRandomGuy",
   "license": "MIT",
   "private": true,
@@ -16,11 +16,13 @@
     "check": "node scripts/check.mjs",
     "test": "node scripts/test.mjs",
     "build:web": "node scripts/build-web.mjs",
-    "build:win": "electron-builder --win nsis portable --x64 --publish never"
+    "build:win": "electron-builder --win nsis portable --x64 --publish never",
+    "build:linux": "electron-builder --linux AppImage deb --x64 --publish never",
+    "build:win:signed": "node scripts/build-signed.cjs"
   },
   "devDependencies": {
-    "electron": "44.5.0",
-    "electron-builder": "26.15.3"
+    "electron": "44.10.1",
+    "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "io.github.notthatrandomguy.socrates-video-pro",
@@ -35,7 +37,8 @@
       "assets/**/*",
       "desktop/**/*",
       "LICENSE",
-      "package.json"
+      "package.json",
+      "CHANGELOG.md"
     ],
     "win": {
       "target": [
@@ -54,6 +57,31 @@
     },
     "portable": {
       "artifactName": "Socrates-Video-Pro-${version}-Portable-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "AudioVideo;Video;AudioVideoEditing",
+      "icon": "assets/icon.png",
+      "executableName": "socrates-video-pro",
+      "maintainer": "NotThatRandomGuy <noreply@users.noreply.github.com>",
+      "artifactName": "Socrates-Video-Pro-${version}-Linux-${arch}.${ext}"
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libasound2 | libasound2t64",
+        "libgbm1"
+      ]
     }
   }
 }

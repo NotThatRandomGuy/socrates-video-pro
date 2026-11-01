@@ -7,14 +7,14 @@ await check('booted', `!document.body.classList.contains('booting') && typeof Cm
 await check('tracks exist', `state.project.tracks.length === 2`);
 await check('import synthesized video+audio', `(async () => {
   const cv = document.createElement('canvas'); cv.width = 320; cv.height = 180; const ctx = cv.getContext('2d');
-  const ac = AudioEngine.ctx(); await ac.resume(); const osc = ac.createOscillator(); const dest = ac.createMediaStreamDestination(); osc.connect(dest); osc.start();
-  const stream = cv.captureStream(30); dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+  const ac = AudioEngine.ctx(); await AudioEngine.ready(); const osc = ac.createOscillator(); const dest = ac.createMediaStreamDestination(); osc.connect(dest); osc.start();
+  const stream = cv.captureStream(0); dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
   const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus' }); const chunks = []; rec.ondataavailable = e => chunks.push(e.data);
-  let f = 0; const iv = setInterval(() => { ctx.fillStyle = 'hsl(' + (f * 10 % 360) + ',80%,50%)'; ctx.fillRect(0, 0, 320, 180); ctx.fillStyle = '#fff'; ctx.font = '40px sans-serif'; ctx.fillText(String(f++), 20, 100); }, 33);
-  rec.start(); await new Promise(r => setTimeout(r, 2200)); rec.stop(); await new Promise(r => rec.onstop = r); clearInterval(iv); osc.stop();
+  let f = 0; const iv = setInterval(() => { ctx.fillStyle = 'hsl(' + (f * 10 % 360) + ',80%,50%)'; ctx.fillRect(0, 0, 320, 180); ctx.fillStyle = '#fff'; ctx.font = '40px sans-serif'; ctx.fillText(String(f++), 20, 100); stream.getVideoTracks()[0].requestFrame(); }, 33);
+  const started = new Promise(r => rec.onstart = r), stopped = new Promise(r => rec.onstop = r); rec.start(100); await started; await new Promise(r => setTimeout(r, 2200)); rec.stop(); await stopped; clearInterval(iv); osc.stop(); stream.getTracks().forEach(t => t.stop());
   const file = new File(chunks, 'synth.webm', { type: 'video/webm' });
   const [m] = await Media.importFiles([file], { persist: false }); await m.audioReady;
-  window.__m = m; return m.type === 'video' && m.hasAudio === true && !!m.peaks && m.peaks.data.length > 10 ? true : { type: m.type, hasAudio: m.hasAudio, dur: m.duration, err: m.error };
+  window.__m = m; return m.type === 'video' && m.hasAudio === true && !!m.peaks && m.peaks.data.length > 10 ? true : { type: m.type, hasAudio: m.hasAudio, dur: m.duration, err: m.error, bytes:file.size, chunks:chunks.map(c=>c.size),frames:f,context:ac.state };
 })()`);
 await check('add media creates linked A/V clips', `(async () => { const c = await Cmd.addMedia(__m.id, { start: 0 }); const linked = Cmd.linkedOf(c); return c.kind === 'video' && linked.length === 1 && linked[0].kind === 'audio' && findTrackOfClip(linked[0].id).kind === 'audio' ? true : { linked: linked.length }; })()`);
 await check('video frame renders pixels', `(async () => { const c = allClips().find(x => x.kind === 'video'); const el = Media.clipVideo(c); await new Promise(r => { if (el.readyState >= 2) r(); else { el.addEventListener('loadeddata', r, { once: true }); setTimeout(r, 4000); } }); el.currentTime = 0.5; await new Promise(r => { el.addEventListener('seeked', r, { once: true }); setTimeout(r, 2000); }); const cv = document.createElement('canvas'); cv.width = 1920; cv.height = 1080; const ctx = cv.getContext('2d'); Compositor.renderFrame(ctx, 0.5); const d = ctx.getImageData(960, 540, 1, 1).data; return (d[0] + d[1] + d[2]) > 30 ? true : Array.from(d); })()`);

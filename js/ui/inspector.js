@@ -19,6 +19,7 @@ const Inspector = (() => {
   const lt = (clip) => U.clamp(state.currentTime - clip.start, 0, clip.duration);
   function readVal(clip, path) { if (path.startsWith('fx.')) return Cmd.fxParamValue(clip, path, lt(clip)); return KF.has(clip, path) ? KF.value(clip, path, lt(clip)) : U.getPath(clip, path); }
   function writeVal(clip, path, val, commit) {
+    if (findTrackOfClip(clip.id)?.locked || (typeof val === 'number' && !Number.isFinite(val))) return;
     if (!began) { History.begin('Edit'); began = true; }
     if (KF.has(clip, path)) KF.set(clip, path, lt(clip), val);
     else if (path.startsWith('fx.')) { const [, id, p] = path.split('.'); const fx = clip.effects.find(f => f.id === id); if (fx) fx.params[p] = val; }
@@ -80,6 +81,7 @@ const Inspector = (() => {
     root.append(U.el('div', { class: 'insp-title' }, U.el('span', { class: 'kind-badge ' + clip.kind }, clip.kind), U.el('span', { class: 'insp-name', title: clip.name }, clip.name), state.selection.size > 1 ? U.el('span', { class: 'muted' }, ` +${state.selection.size - 1}`) : null), tabs);
     const body = U.el('div', { class: 'insp-body' }); root.appendChild(body);
     ({ video: renderVideo, audio: renderAudio, effects: renderEffects, text: renderText, shape: renderShape, sticker: renderSticker, solid: renderSolid, clip: renderClipInfo })[state.activeInspectorTab](body, clip);
+    if (findTrackOfClip(clip.id)?.locked) { body.inert = true; root.append(U.el('p', { class: 'hint pad' }, 'Unlock this track to edit its clips.')); }
   }
   function tabsFor(c) { const t = ['clip']; if (isVisualKind(c.kind) && c.kind !== 'adjustment') t.push('video'); if (c.kind === 'text') t.push('text'); if (c.kind === 'shape') t.push('shape'); if (c.kind === 'sticker') t.push('sticker'); if (c.kind === 'solid') t.push('solid'); if (c.kind === 'audio') t.push('audio'); if (c.kind !== 'audio') t.push('effects'); return t; }
   function tabLabel(k) { return ({ clip: 'Clip', video: 'Video', audio: 'Audio', effects: 'Effects', text: 'Text', shape: 'Shape', sticker: 'Sticker', solid: 'Fill' })[k]; }

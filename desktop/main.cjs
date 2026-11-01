@@ -10,11 +10,12 @@ if (process.env.PORTABLE_EXECUTABLE_DIR) {
   fs.mkdirSync(data, { recursive: true }); app.setPath('userData', data);
 }
 const smoke = process.argv.includes('--smoke-test');
+app.setAppUserModelId('io.github.notthatrandomguy.socrates-video-pro');
 if (smoke) { app.setPath('userData', path.join(app.getPath('temp'), 'socrates-smoke-' + process.pid)); app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required'); }
 let win;
 async function createWindow() {
   const entry = pathToFileURL(path.join(__dirname, '..', 'index.html')).href;
-  win = new BrowserWindow({ width: 1600, height: 1000, minWidth: 1000, minHeight: 700, show: !smoke, backgroundColor: '#10131b', icon: path.join(__dirname, '..', 'assets', 'icon.ico'), webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true } });
+  win = new BrowserWindow({ width: 1600, height: 1000, minWidth: 1000, minHeight: 700, show: !smoke, backgroundColor: '#10131b', icon: path.join(__dirname, '..', 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'), webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true } });
   Menu.setApplicationMenu(null);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== entry) event.preventDefault(); });
@@ -31,8 +32,11 @@ async function createWindow() {
     try {
       if (request.frame.url !== entry) return callback({});
       const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+      if (!sources.length) return callback({});
+      // PipeWire has already shown the desktop portal's picker and returns one source.
+      if (process.platform === 'linux' && sources.length === 1) return callback({ video: sources[0] });
       const result = await dialog.showMessageBox(win, { title: 'Choose what to record', message: 'Choose a screen or window to share', buttons: [...sources.map(s => s.name), 'Cancel'], cancelId: sources.length, defaultId: sources.length });
-      callback(result.response < sources.length ? { video: sources[result.response] } : {});
+      callback(result.response < sources.length ? { video: sources[result.response], ...(process.platform === 'win32' && request.audioRequested ? { audio: 'loopback' } : {}) } : {});
     } catch { callback({}); }
   }, { useSystemPicker: true });
   await win.loadURL(entry);
@@ -46,11 +50,14 @@ async function createWindow() {
         const cv=document.createElement('canvas');cv.width=1000;cv.height=800;Compositor.renderFrame(cv.getContext('2d'),0);
         const pixel=cv.getContext('2d').getImageData(500,400,1,1).data;
         if (pixel[3] !== 255 || !History.canUndo()) throw Error('Render/history failed');
-        state.dirty=false;return {width:state.project.width,height:state.project.height,webCodecs:typeof VideoEncoder!=='undefined',sandboxed:typeof require==='undefined'};
+        let output; const download=U.download; U.download=(blob)=>output=blob;
+        try { await Exporter.exportWebCodecs({format:Exporter.FORMATS[1],width:160,height:128,fps:10,bitrate:300000,audio:false,from:0,to:.2,name:'desktop-smoke'}); } finally { U.download=download; }
+        if (!output || output.size < 100) throw Error('Packaged video export failed');
+        state.dirty=false;return {width:state.project.width,height:state.project.height,webCodecs:typeof VideoEncoder!=='undefined',sandboxed:typeof require==='undefined',exportBytes:output.size};
       })()`);
       console.log('DESKTOP_SMOKE_PASS ' + JSON.stringify(result)); app.exit(0);
     } catch (e) { console.error(e); app.exit(1); }
   }
 }
-app.whenReady().then(createWindow);
+app.whenReady().then(createWindow).catch(error => { console.error(error); app.exit(1); });
 app.on('window-all-closed', () => app.quit());

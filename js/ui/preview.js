@@ -8,14 +8,17 @@ const Player = (() => {
   let raf = null, needRender = true, lastRenderT = -1, wallStart = 0, wallProj = 0;
   const canvas = () => document.getElementById('previewCanvas');
   const fps = () => state.project.fps;
+  let playbackRange = null;
 
-  function loopRange() { const P = state.project; if (P.inPoint !== null && P.outPoint !== null && P.outPoint > P.inPoint) return [P.inPoint, P.outPoint]; return [0, state.duration]; }
+  function loopRange() { if (playbackRange) return playbackRange; const P = state.project; if (P.inPoint !== null && P.outPoint !== null && P.outPoint > P.inPoint) return [P.inPoint, Math.min(P.outPoint, state.duration)]; return [0, state.duration]; }
 
-  function play(rate = 1) {
+  function play(rate = 1, range = null) {
     if (state.duration <= 0) return;
+    playbackRange = range;
     const [a, b] = loopRange();
     if (rate > 0 && state.currentTime >= b - 1e-3) state.currentTime = a;
     if (rate < 0 && state.currentTime <= a + 1e-3) state.currentTime = b;
+    if (raf) cancelAnimationFrame(raf); raf = null;
     state.playing = true; state.playRate = rate;
     if (rate > 0) AudioEngine.play(state.currentTime, rate); else { AudioEngine.stop(); wallStart = performance.now(); wallProj = state.currentTime; }
     Events.emit('playback:changed'); tick();
@@ -23,6 +26,7 @@ const Player = (() => {
   function pause() {
     if (!state.playing) { return; }
     state.currentTime = U.clamp(now(), ...loopRange()); state.playing = false; state.playRate = 1; AudioEngine.stop();
+    playbackRange = null;
     for (const v of Media.allClipEls().values()) v.pause();
     state.currentTime = U.snapToFrame(state.currentTime, fps());
     Events.emit('playback:changed'); Events.emit('time:changed'); requestRender();
@@ -35,6 +39,7 @@ const Player = (() => {
   }
   function now() { if (!state.playing) return state.currentTime; if (state.playRate > 0) return AudioEngine.now(); return wallProj + (performance.now() - wallStart) / 1000 * state.playRate; }
   function seek(t, { snap = true } = {}) {
+    if (!Number.isFinite(t)) return;
     const was = state.playing; if (was) { AudioEngine.stop(); }
     t = U.clamp(t, 0, Math.max(state.duration, 0)); if (snap) t = U.snapToFrame(t, fps());
     state.currentTime = t; if (was) { if (state.playRate > 0) AudioEngine.play(t, state.playRate); wallStart = performance.now(); wallProj = t; }
@@ -83,12 +88,12 @@ const Player = (() => {
       }
       state.currentTime = t; needRender = true; Events.emit('time:changed');
     }
-    if (needRender) { needRender = false; syncVideo(state.currentTime); render(); }
+    if (needRender) { needRender = false; if (state.exporting !== 'webcodecs') { syncVideo(state.currentTime); render(); } }
     if (state.playing) raf = requestAnimationFrame(tick);
   }
   function render() {
     const cv = canvas(); if (!cv) return; const P = state.project; const q = state.previewQuality || 1;
-    const w = Math.round(P.width * q), h = Math.round(P.height * q); if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; Preview.layout(); }
+    const w = Math.max(1, Math.round(P.width * q)), h = Math.max(1, Math.round(P.height * q)); if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; Preview.layout(); }
     const ctx = cv.getContext('2d'); ctx.setTransform(q, 0, 0, q, 0, 0);
     Compositor.renderFrame(ctx, state.currentTime); lastRenderT = state.currentTime;
     Preview.drawOverlay();

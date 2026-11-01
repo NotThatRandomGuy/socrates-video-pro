@@ -5,11 +5,11 @@ await check('booted over file://', `location.protocol === 'file:' && !document.b
 await check('secure context (recording APIs)', `window.isSecureContext === true`);
 await check('import + GLFX on video + export', `(async () => {
   const cv = document.createElement('canvas'); cv.width = 320; cv.height = 180; const ctx = cv.getContext('2d');
-  const ac = AudioEngine.ctx(); await ac.resume(); const osc = ac.createOscillator(); const dest = ac.createMediaStreamDestination(); osc.connect(dest); osc.start();
-  const stream = cv.captureStream(30); dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+  const ac = AudioEngine.ctx(); await AudioEngine.ready(); const osc = ac.createOscillator(); const dest = ac.createMediaStreamDestination(); osc.connect(dest); osc.start();
+  const stream = cv.captureStream(0); dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
   const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus' }); const chunks = []; rec.ondataavailable = e => chunks.push(e.data);
-  let f = 0; const iv = setInterval(() => { ctx.fillStyle = 'rgb(0,200,0)'; ctx.fillRect(0, 0, 320, 180); ctx.fillStyle = '#fff'; ctx.fillRect(100 + f, 60, 60, 60); f++; }, 33);
-  rec.start(); await new Promise(r => setTimeout(r, 1500)); rec.stop(); await new Promise(r => rec.onstop = r); clearInterval(iv); osc.stop();
+  let f = 0; const iv = setInterval(() => { ctx.fillStyle = 'rgb(0,200,0)'; ctx.fillRect(0, 0, 320, 180); ctx.fillStyle = '#fff'; ctx.fillRect(100 + f, 60, 60, 60); f++; stream.getVideoTracks()[0].requestFrame(); }, 33);
+  const started = new Promise(r => rec.onstart = r), stopped = new Promise(r => rec.onstop = r); rec.start(100); await started; await new Promise(r => setTimeout(r, 1500)); rec.stop(); await stopped; clearInterval(iv); osc.stop(); stream.getTracks().forEach(t => t.stop());
   const [m] = await Media.importFiles([new File(chunks, 'g.webm', { type: 'video/webm' })]); await m.audioReady;
   const c = await Cmd.addMedia(m.id, { start: 0 }); Cmd.addEffect([c.id], 'chromakey');
   const el = Media.clipVideo(c); await new Promise(r => { if (el.readyState >= 2) r(); else { el.addEventListener('loadeddata', r, { once: true }); setTimeout(r, 4000); } }); el.currentTime = .5; await new Promise(r => { el.addEventListener('seeked', r, { once: true }); setTimeout(r, 2000); });

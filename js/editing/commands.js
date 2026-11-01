@@ -6,6 +6,7 @@
 const Cmd = (() => {
   const P = () => state.project;
   const fps = () => P().fps;
+  const editable = c => !!c && !findTrackOfClip(c.id)?.locked;
   const MIN_DUR = 1 / 60;
   const refresh = () => { recalcDuration(); Events.emit('project:changed'); };
 
@@ -50,11 +51,12 @@ const Cmd = (() => {
     }
     return out;
   }
-  function shiftAfter(t, dt, tracks = P().tracks) { tracks.forEach(tr => tr.clips.forEach(c => { if (c.start >= t - 1e-6) c.start += dt; })); P().markers.forEach(m => { if (m.time >= t - 1e-6) m.time += dt; }); }
+  function shiftAfter(t, dt, tracks = P().tracks) { tracks.filter(tr => !tr.locked).forEach(tr => tr.clips.forEach(c => { if (c.start >= t - 1e-6) c.start = Math.max(0, c.start + dt); })); P().markers.forEach(m => { if (m.time >= t - 1e-6) m.time += dt; }); }
   /* place clip on track at start; mode 'overwrite' | 'insert' */
   function placeClip(clip, track, start, mode = 'overwrite') {
+    if (!track || track.locked || !Number.isFinite(start)) return false;
     clip.start = Math.max(0, start);
-    if (mode === 'insert') shiftAfter(clip.start, clip.duration, P().tracks.filter(t => t.kind === track.kind || true));
+    if (mode === 'insert') shiftAfter(clip.start, clip.duration, P().tracks);
     else overwriteRange(track, clip.start, clipEnd(clip), clip);
     if (!track.clips.includes(clip)) track.clips.push(clip);
     track.clips.sort((a, b) => a.start - b.start);
@@ -75,6 +77,7 @@ const Cmd = (() => {
       const dur = m.duration > 0 && isFinite(m.duration) ? m.duration : 5;
       let track = trackId ? findTrack(trackId) : null;
       if (!track || (track.kind === 'audio' && kind !== 'audio') || (track.kind === 'video' && kind === 'audio')) track = ensureTrack(kind === 'audio' ? 'audio' : 'video', 0);
+      if (track.locked) { UI.toast('Unlock the track before adding media'); return null; }
       const st = start === null ? endOf(track) : start;
       const placeMode = mode || (state.ripple ? 'insert' : 'overwrite');
       const clip = Model.newClip(kind, { mediaId, name: m.name, duration: dur, sourceDuration: dur });
@@ -97,6 +100,7 @@ const Cmd = (() => {
       let track = null; const vts = videoTracks();
       if (trackIndex !== null) track = ensureTrack('video', trackIndex);
       else { for (const t of vts) if (!t.locked && !t.clips.some(c => c.start < start + duration && clipEnd(c) > start)) { track = t; break; } if (!track) track = ensureTrack('video', vts.length); }
+      if (track.locked) return null;
       placeClip(clip, track, start, 'overwrite'); recalcDuration(); select(clip.id); return clip;
     });
   }
@@ -108,44 +112,57 @@ const Cmd = (() => {
       const removed = [];
       for (const id of ids) { const t = findTrackOfClip(id); const c = findClip(id); if (!t || !c || t.locked) continue; t.clips.splice(t.clips.indexOf(c), 1); removed.push({ c, t }); Media.releaseClip(id); }
       state.selection.clear();
-      if (ripple) { removed.sort((a, b) => b.c.start - a.c.start).forEach(({ c, t }) => { const gapEnd = clipEnd(c); const next = t.clips.filter(x => x.start >= c.start - 1e-6).sort((a, b) => a.start - b.start)[0]; const gap = (next ? Math.min(next.start, gapEnd) : gapEnd) - c.start; if (gap > 0) shiftAfter(gapEnd - 1e-6, -gap); }); }
+      if (ripple) {
+        const ranges = [];
+        for (const { c } of removed.sort((a, b) => a.c.start - b.c.start)) {
+          const last = ranges[ranges.length - 1];
+          if (last && c.start <= last[1]) last[1] = Math.max(last[1], clipEnd(c));
+          else ranges.push([c.start, clipEnd(c)]);
+        }
+        for (const [a, b] of ranges.reverse()) shiftAfter(b, a - b);
+      }
     }); refresh(); Events.emit('selection:changed');
   }
   function rippleDeleteGap(track, t) { // delete empty gap at time t on track
+    if (!track || track.locked) return;
     const sorted = track.clips.slice().sort((a, b) => a.start - b.start); const prev = sorted.filter(c => clipEnd(c) <= t).pop(); const next = sorted.find(c => c.start >= t);
     if (!next) return; const gs = prev ? clipEnd(prev) : 0; const gap = next.start - gs; if (gap <= 0) return;
     mutate('Close gap', () => shiftAfter(next.start - 1e-6, -gap)); refresh();
   }
-  function closeAllGaps(trackId) { const tr = findTrack(trackId); if (!tr) return; mutate('Close gaps', () => { let pos = 0; tr.clips.slice().sort((a, b) => a.start - b.start).forEach(c => { c.start = pos; pos += c.duration; }); }); refresh(); }
+  function closeAllGaps(trackId) { const tr = findTrack(trackId); if (!tr || tr.locked) return; mutate('Close gaps', () => { let pos = 0; tr.clips.slice().sort((a, b) => a.start - b.start).forEach(c => { c.start = pos; pos += c.duration; }); }); refresh(); }
 
   /* ---------------- split ---------------- */
   function splitClip(clip, t, track = findTrackOfClip(clip.id)) {
+    if (!editable(clip) || !track || !Number.isFinite(t)) return null;
     if (t <= clip.start + MIN_DUR || t >= clipEnd(clip) - MIN_DUR) return null;
     const cut = t - clip.start; const right = U.deepClone(clip); right.id = U.uid('c'); right.start = t; right.duration = clip.duration - cut; right.offset = clip.offset + cut * clip.speed;
     right.transitionIn = { type: 'none', duration: .5 }; clip.transitionOut = { type: 'none', duration: .5 };
     if (clip.linkId) { right.linkId = clip.linkId + '_r'; } // keep linked halves linked to each other
-    KF.shift(right, -cut); Object.keys(right.keyframes || {}).forEach(k => { right.keyframes[k] = right.keyframes[k].filter(kf => kf.t >= -1e-6); if (!right.keyframes[k].length) delete right.keyframes[k]; });
-    Object.keys(clip.keyframes || {}).forEach(k => { clip.keyframes[k] = clip.keyframes[k].filter(kf => kf.t <= cut + 1e-6); if (!clip.keyframes[k].length) delete clip.keyframes[k]; });
+    // Keep surrounding keys: they define interpolation and easing at the cut.
+    KF.shift(right, -cut);
     clip.duration = cut; track.clips.push(right); track.clips.sort((a, b) => a.start - b.start); return right;
   }
   function splitAt(t = state.currentTime, ids = null) {
     const targets = ids ? ids.map(findClip).filter(Boolean) : (state.selection.size ? selectedClips() : allClips().filter(c => !findTrackOfClip(c.id).locked));
-    const hits = targets.filter(c => t > c.start + MIN_DUR && t < clipEnd(c) - MIN_DUR); if (!hits.length) return;
+    const hits = targets.filter(c => editable(c) && t > c.start + MIN_DUR && t < clipEnd(c) - MIN_DUR); if (!hits.length) return;
     mutate('Split', () => { const linkMap = {}; hits.forEach(c => { const r = splitClip(c, t); if (r && c.linkId) { if (!linkMap[c.linkId]) linkMap[c.linkId] = U.uid('ln'); r.linkId = linkMap[c.linkId]; } }); }); refresh();
   }
 
   /* ---------------- move / trim (used by timeline drags; caller wraps History) ---------------- */
   function moveClipTo(clip, newStart, newTrack) {
+    if (!editable(clip) || !Number.isFinite(newStart)) return false;
     const oldTrack = findTrackOfClip(clip.id);
     if (newTrack && newTrack !== oldTrack) { if (newTrack.kind !== oldTrack.kind || newTrack.locked) return false; oldTrack.clips.splice(oldTrack.clips.indexOf(clip), 1); newTrack.clips.push(clip); }
     clip.start = Math.max(0, newStart); return true;
   }
   function trimLeft(clip, newStart) {
+    if (!editable(clip) || !Number.isFinite(newStart)) return;
     const maxStart = clipEnd(clip) - MIN_DUR; newStart = U.clamp(newStart, isUnbounded(clip) ? 0 : Math.max(0, clip.start - clip.offset / clip.speed), maxStart);
     const d = newStart - clip.start; if (Math.abs(d) < 1e-9) return;
     clip.start = newStart; clip.duration -= d; if (!isUnbounded(clip)) clip.offset += d * clip.speed; KF.shift(clip, -d);
   }
   function trimRight(clip, newEnd) {
+    if (!editable(clip) || !Number.isFinite(newEnd)) return;
     const maxEnd = isUnbounded(clip) ? Infinity : clip.start + (clip.sourceDuration - clip.offset) / clip.speed;
     newEnd = U.clamp(newEnd, clip.start + MIN_DUR, maxEnd); clip.duration = newEnd - clip.start;
   }
@@ -158,10 +175,12 @@ const Cmd = (() => {
     if (!state.clipboard) return;
     mutate('Paste', () => {
       const linkMap = {}; const ids = [];
-      for (const it of state.clipboard) {
+      const entries = state.clipboard.filter(it => !findTrack(it.trackId)?.locked);
+      if (state.ripple && entries.length) shiftAfter(t, Math.max(...entries.map(it => it.rel + it.clip.duration)));
+      for (const it of entries) {
         const c = U.deepClone(it.clip); c.id = U.uid('c'); if (c.linkId) { linkMap[c.linkId] = linkMap[c.linkId] || U.uid('ln'); c.linkId = linkMap[c.linkId]; }
         const track = findTrack(it.trackId) || ensureTrack(it.kind, it.trackIndex);
-        placeClip(c, track, t + it.rel, state.ripple ? 'insert' : 'overwrite'); ids.push(c.id);
+        placeClip(c, track, t + it.rel, 'overwrite'); ids.push(c.id);
       }
       state.selection = new Set(ids);
     }); refresh(); Events.emit('selection:changed');
@@ -169,43 +188,45 @@ const Cmd = (() => {
   function duplicate() { const cs = selectedClips(); if (!cs.length) return; const end = Math.max(...cs.map(clipEnd)); const saved = state.clipboard; copy(); paste(end); state.clipboard = saved; }
   function pasteAttributes() {
     if (!state.clipboard || !state.clipboard.length) return; const src = state.clipboard[0].clip;
-    mutate('Paste attributes', () => selectedClips().forEach(c => { c.transform = U.deepClone(src.transform); c.effects = U.deepClone(src.effects).map(f => ({ ...f, id: U.uid('fx') })); c.crop = U.deepClone(src.crop); c.blend = src.blend; c.fit = src.fit; c.cornerRadius = src.cornerRadius; if (c.text && src.text) { const content = c.text.content; c.text = U.deepClone(src.text); c.text.content = content; } if (c.audio && src.audio) c.audio = U.deepClone(src.audio); }));
+    mutate('Paste attributes', () => selectedClips().filter(editable).forEach(c => { c.transform = U.deepClone(src.transform); c.effects = U.deepClone(src.effects).map(f => ({ ...f, id: U.uid('fx') })); c.crop = U.deepClone(src.crop); c.blend = src.blend; c.fit = src.fit; c.cornerRadius = src.cornerRadius; if (c.text && src.text) { const content = c.text.content; c.text = U.deepClone(src.text); c.text.content = content; } if (c.audio && src.audio) c.audio = U.deepClone(src.audio); }));
   }
 
   /* ---------------- clip properties ---------------- */
-  function setProp(clip, path, val, label = 'Edit') { mutate(label, () => U.setPath(clip, path, val)); }
-  function setPropMany(path, val, label = 'Edit') { mutate(label, () => selectedClips().forEach(c => U.setPath(c, path, val))); }
+  function setProp(clip, path, val, label = 'Edit') { if (!editable(clip)) return; mutate(label, () => U.setPath(clip, path, val)); }
+  function setPropMany(path, val, label = 'Edit') { mutate(label, () => selectedClips().filter(editable).forEach(c => U.setPath(c, path, val))); }
   function setSpeed(clip, speed) {
+    if (!Number.isFinite(speed) || speed < .05 || speed > 16 || ![clip, ...linkedOf(clip)].every(editable)) return false;
     mutate('Speed', () => { const targets = [clip, ...linkedOf(clip)]; targets.forEach(c => { const s0 = c.speed || 1; c.speed = speed; c.duration = c.duration * s0 / speed; KF.scale(c, s0 / speed); }); }); refresh();
   }
-  function setEnabled(ids, on) { mutate('Enable/disable', () => ids.map(findClip).filter(Boolean).forEach(c => c.enabled = on)); }
-  function setLabel(ids, label) { mutate('Label', () => ids.map(findClip).filter(Boolean).forEach(c => c.label = label)); }
-  function rename(clip, name) { mutate('Rename', () => clip.name = name); }
-  function unlink(ids = [...state.selection]) { mutate('Unlink', () => ids.map(findClip).filter(Boolean).forEach(c => c.linkId = null)); }
-  function link(ids = [...state.selection]) { if (ids.length < 2) return; mutate('Link', () => { const id = U.uid('ln'); ids.map(findClip).filter(Boolean).forEach(c => c.linkId = id); }); }
+  function setEnabled(ids, on) { mutate('Enable/disable', () => ids.map(findClip).filter(editable).forEach(c => c.enabled = on)); }
+  function setLabel(ids, label) { mutate('Label', () => ids.map(findClip).filter(editable).forEach(c => c.label = label)); }
+  function rename(clip, name) { if (!editable(clip)) return; mutate('Rename', () => clip.name = name); }
+  function unlink(ids = [...state.selection]) { mutate('Unlink', () => ids.map(findClip).filter(editable).forEach(c => c.linkId = null)); }
+  function link(ids = [...state.selection]) { if (ids.length < 2) return; mutate('Link', () => { const id = U.uid('ln'); ids.map(findClip).filter(editable).forEach(c => c.linkId = id); }); }
   function detachAudio(clip) { unlink([clip.id, ...linkedOf(clip).map(c => c.id)]); }
-  function nudge(dt, ids = [...state.selection]) { mutate('Nudge', () => ids.map(findClip).filter(Boolean).forEach(c => c.start = Math.max(0, c.start + dt))); refresh(); }
-  function nudgeTrack(dir) { mutate('Move to track', () => { for (const c of selectedClips()) { const tr = findTrackOfClip(c.id); const same = P().tracks.filter(t => t.kind === tr.kind); const i = same.indexOf(tr) + dir; if (i < 0 || i >= same.length || same[i].locked) continue; tr.clips.splice(tr.clips.indexOf(c), 1); same[i].clips.push(c); } }); }
-  function alignToPlayhead(edge = 'start') { mutate('Align', () => selectedClips().forEach(c => { c.start = edge === 'start' ? state.currentTime : Math.max(0, state.currentTime - c.duration); })); refresh(); }
-  function setTransition(ids, side, type, duration) { mutate('Transition', () => ids.map(findClip).filter(Boolean).forEach(c => { c[side === 'in' ? 'transitionIn' : 'transitionOut'] = { type, duration: duration ?? c.transitionIn.duration }; })); }
+  function nudge(dt, ids = [...state.selection]) { mutate('Nudge', () => ids.map(findClip).filter(editable).forEach(c => c.start = Math.max(0, c.start + dt))); refresh(); }
+  function nudgeTrack(dir) { mutate('Move to track', () => { for (const c of selectedClips().filter(editable)) { const tr = findTrackOfClip(c.id); const same = P().tracks.filter(t => t.kind === tr.kind); const i = same.indexOf(tr) + dir; if (i < 0 || i >= same.length || same[i].locked) continue; tr.clips.splice(tr.clips.indexOf(c), 1); same[i].clips.push(c); } }); }
+  function alignToPlayhead(edge = 'start') { mutate('Align', () => selectedClips().filter(editable).forEach(c => { c.start = edge === 'start' ? state.currentTime : Math.max(0, state.currentTime - c.duration); })); refresh(); }
+  function setTransition(ids, side, type, duration) { mutate('Transition', () => ids.map(findClip).filter(editable).forEach(c => { c[side === 'in' ? 'transitionIn' : 'transitionOut'] = { type, duration: duration ?? c.transitionIn.duration }; })); }
   function applyTransitionBetweenSelected(type, duration = .6) { // for adjacent pairs among selection, transitionIn on the later clip
     mutate('Transition', () => { const cs = selectedClips(); if (cs.length === 1) { cs[0].transitionIn = { type, duration }; cs[0].transitionOut = { type, duration }; return; } cs.forEach(c => { const tr = findTrackOfClip(c.id); const prev = tr.clips.filter(x => Math.abs(clipEnd(x) - c.start) < .02 && x !== c)[0]; if (prev) c.transitionIn = { type, duration }; else c.transitionIn = { type, duration }; }); });
   }
-  function addEffect(ids, type) { let fx = null; mutate('Add effect', () => ids.map(findClip).filter(Boolean).forEach(c => { fx = Model.newEffect(type); if (fx) c.effects.push(fx); })); if (fx) state.selectedEffectId = fx.id; return fx; }
-  function removeEffect(clip, fxId) { mutate('Remove effect', () => { clip.effects = clip.effects.filter(f => f.id !== fxId); Object.keys(clip.keyframes || {}).forEach(k => { if (k.startsWith('fx.' + fxId + '.')) delete clip.keyframes[k]; }); }); }
-  function moveEffect(clip, fxId, dir) { mutate('Reorder effect', () => { const i = clip.effects.findIndex(f => f.id === fxId); const j = i + dir; if (i < 0 || j < 0 || j >= clip.effects.length) return;[clip.effects[i], clip.effects[j]] = [clip.effects[j], clip.effects[i]]; }); }
-  function resetTransform(clip) { mutate('Reset transform', () => { clip.transform = Model.newClip(clip.kind).transform; ['transform.x', 'transform.y', 'transform.scaleX', 'transform.scaleY', 'transform.rotation', 'transform.opacity', 'transform.anchorX', 'transform.anchorY'].forEach(p => KF.clear(clip, p)); }); }
-  function fitToFrame(clip, mode) { mutate('Fit', () => { clip.fit = mode; clip.transform.scaleX = clip.transform.scaleY = 1; clip.transform.x = clip.transform.y = 0; }); }
-  function normalizeAudio(clip) { mutate('Normalize', () => { const pk = AudioEngine.peakOf(clip); clip.audio.normalize = U.clamp(.98 / pk, .1, 10); }); }
+  function addEffect(ids, type) { let fx = null; mutate('Add effect', () => ids.map(findClip).filter(editable).forEach(c => { fx = Model.newEffect(type); if (fx) c.effects.push(fx); })); if (fx) state.selectedEffectId = fx.id; return fx; }
+  function removeEffect(clip, fxId) { if (!editable(clip)) return; mutate('Remove effect', () => { clip.effects = clip.effects.filter(f => f.id !== fxId); Object.keys(clip.keyframes || {}).forEach(k => { if (k.startsWith('fx.' + fxId + '.')) delete clip.keyframes[k]; }); }); }
+  function moveEffect(clip, fxId, dir) { if (!editable(clip)) return; mutate('Reorder effect', () => { const i = clip.effects.findIndex(f => f.id === fxId); const j = i + dir; if (i < 0 || j < 0 || j >= clip.effects.length) return;[clip.effects[i], clip.effects[j]] = [clip.effects[j], clip.effects[i]]; }); }
+  function resetTransform(clip) { if (!editable(clip)) return; mutate('Reset transform', () => { clip.transform = Model.newClip(clip.kind).transform; ['transform.x', 'transform.y', 'transform.scaleX', 'transform.scaleY', 'transform.rotation', 'transform.opacity', 'transform.anchorX', 'transform.anchorY'].forEach(p => KF.clear(clip, p)); }); }
+  function fitToFrame(clip, mode) { if (!editable(clip)) return; mutate('Fit', () => { clip.fit = mode; clip.transform.scaleX = clip.transform.scaleY = 1; clip.transform.x = clip.transform.y = 0; }); }
+  function normalizeAudio(clip) { if (!editable(clip)) return; mutate('Normalize', () => { const pk = AudioEngine.peakOf(clip); clip.audio.normalize = U.clamp(.98 / pk, .1, 10); }); }
 
   /* ---------------- keyframes ---------------- */
-  function toggleKeyframe(clip, path, lt = state.currentTime - clip.start) {
+  function toggleKeyframe(clip, path, lt = state.currentTime - clip.start) { if (!editable(clip)) return;
     lt = U.clamp(lt, 0, clip.duration); const has = KF.at(clip, path, lt);
     mutate(has ? 'Remove keyframe' : 'Add keyframe', () => { if (has) KF.remove(clip, path, lt); else { const v = path.startsWith('fx.') ? fxParamValue(clip, path, lt) : (KF.has(clip, path) ? KF.value(clip, path, lt) : U.getPath(clip, path)); KF.set(clip, path, lt, v); } });
   }
   function fxParamValue(clip, path, lt) { const [, fxId, param] = path.split('.'); const fx = clip.effects.find(f => f.id === fxId); return fx ? KF.fxValue(clip, fx, param, lt) : 0; }
   /* set a value: if the property has keyframes, write/update a keyframe at playhead, else set base */
   function setAnimated(clip, path, val, label = 'Edit') {
+    if (!editable(clip) || (typeof val === 'number' && !Number.isFinite(val))) return;
     const lt = U.clamp(state.currentTime - clip.start, 0, clip.duration);
     History.begin(label);
     if (KF.has(clip, path)) KF.set(clip, path, lt, val);
@@ -213,8 +234,8 @@ const Cmd = (() => {
     else U.setPath(clip, path, val);
     History.commit(label); Events.emit('project:changed');
   }
-  function setKeyframeEase(clip, path, lt, ease) { mutate('Easing', () => { const k = KF.at(clip, path, lt); if (k) k.ease = ease; }); }
-  function clearKeyframes(clip, path) { mutate('Clear keyframes', () => KF.clear(clip, path)); }
+  function setKeyframeEase(clip, path, lt, ease) { if (!editable(clip)) return; mutate('Easing', () => { const k = KF.at(clip, path, lt); if (k) k.ease = ease; }); }
+  function clearKeyframes(clip, path) { if (!editable(clip)) return; mutate('Clear keyframes', () => KF.clear(clip, path)); }
   function nextKeyframeTime(clip, dir) { const ts = KF.allTimes(clip).map(t => t + clip.start); const cur = state.currentTime; return dir > 0 ? ts.find(t => t > cur + 1e-4) : ts.slice().reverse().find(t => t < cur - 1e-4); }
 
   /* ---------------- markers / in-out ---------------- */
@@ -232,6 +253,7 @@ const Cmd = (() => {
 
   /* ---------------- freeze frame / misc ---------------- */
   async function freezeFrame(clip = primaryClip(), t = state.currentTime) {
+    if (!editable(clip)) return;
     if (!clip || clip.kind !== 'video') return UI.toast('Select a video clip');
     const m = findMedia(clip.mediaId); const lt = clip.offset + (t - clip.start) * clip.speed;
     const frame = await Media.grabFrame(m, lt, 4096); if (!frame) return UI.toast('Could not grab frame');
@@ -255,7 +277,7 @@ const Cmd = (() => {
     Compositor.clearCaches(); Events.emit('project:resized');
   }
   function centerClip(axis = 'both') {
-    mutate('Center in canvas', () => selectedClips().forEach(c => {
+    mutate('Center in canvas', () => selectedClips().filter(editable).forEach(c => {
       if (!isVisualKind(c.kind) || ['solid', 'adjustment'].includes(c.kind) || findTrackOfClip(c.id)?.locked) return;
       const b = Compositor.clipBounds(c, state.currentTime), e = evalClip(c, state.currentTime);
       const [x, y] = U.rotatePoint(b.x - b.ax * b.w, b.y - b.ay * b.h, b.x, b.y, b.rot);
@@ -266,7 +288,7 @@ const Cmd = (() => {
       }
     }));
   }
-  function setFps(f) { mutate('Frame rate', () => P().fps = f); }
+  function setFps(f) { if (Number.isInteger(f) && f >= 1 && f <= 120) mutate('Frame rate', () => P().fps = f); }
   function setBackground(c) { mutate('Background', () => P().background = c); }
 
   return { select, selectAll, deselect, selectForward, selectTrackClips, addTrack, removeTrack, moveTrack, setTrackProp, cleanEmptyTracks, ensureTrack, placeClip, overwriteRange, shiftAfter, firstGapFor, endOf, addMedia, addGenerated, deleteClips, rippleDeleteGap, closeAllGaps, splitClip, splitAt, moveClipTo, trimLeft, trimRight, linkedOf, copy, cut, paste, duplicate, pasteAttributes, setProp, setPropMany, setSpeed, setEnabled, setLabel, rename, unlink, link, detachAudio, nudge, nudgeTrack, alignToPlayhead, setTransition, applyTransitionBetweenSelected, addEffect, removeEffect, moveEffect, resetTransform, fitToFrame, normalizeAudio, toggleKeyframe, setAnimated, setKeyframeEase, clearKeyframes, nextKeyframeTime, fxParamValue, addMarker, removeMarker, updateMarker, clearMarkers, setIn, setOut, clearInOut, extractInOut, freezeFrame, cropCanvas, resetCanvasCrop, centerClip, setProjectSize, setFps, setBackground, MIN_DUR };

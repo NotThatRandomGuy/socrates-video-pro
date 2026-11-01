@@ -9,7 +9,7 @@ const U = {
   round: (v, d = 2) => { const p = Math.pow(10, d); return Math.round(v * p) / p; },
   uid: (p = 'id') => p + '_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4),
   deepClone: (o) => JSON.parse(JSON.stringify(o)),
-  isNum: (v) => typeof v === 'number' && !isNaN(v),
+  isNum: (v) => typeof v === 'number' && Number.isFinite(v),
   esc: (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
   fmtBytes: (b) => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : b < 1073741824 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1073741824).toFixed(2) + ' GB',
   el(tag, attrs = {}, ...children) {
@@ -33,7 +33,7 @@ const U = {
   readFileText: (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsText(file); }),
   readFileBuffer: (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(file); }),
   pickFiles(accept, multiple = true) {
-    return new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = multiple; i.onchange = () => res(Array.from(i.files)); i.click(); });
+    return new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = multiple; i.onchange = () => res(Array.from(i.files)); i.oncancel = () => res([]); i.click(); });
   },
   sleep: (ms) => new Promise(r => setTimeout(r, ms)),
   nextFrame: () => new Promise(r => requestAnimationFrame(r)),
@@ -86,7 +86,7 @@ const U = {
   EASINGS: ['linear', 'ease-in', 'ease-out', 'ease-in-out', 'smooth', 'ease-out-back', 'bounce', 'elastic', 'hold'],
 
   getPath(obj, path) { return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj); },
-  setPath(obj, path, val) { const ks = path.split('.'); let o = obj; for (let i = 0; i < ks.length - 1; i++) { if (o[ks[i]] == null || typeof o[ks[i]] !== 'object') o[ks[i]] = {}; o = o[ks[i]]; } o[ks[ks.length - 1]] = val; },
+  setPath(obj, path, val) { const ks = path.split('.'); if (ks.some(k => ['__proto__', 'prototype', 'constructor'].includes(k)) || (typeof val === 'number' && !Number.isFinite(val))) throw new Error('Invalid property value'); let o = obj; for (let i = 0; i < ks.length - 1; i++) { if (o[ks[i]] == null || typeof o[ks[i]] !== 'object') o[ks[i]] = {}; o = o[ks[i]]; } o[ks[ks.length - 1]] = val; },
 
   /* ---- geometry ---- */
   rotatePoint(x, y, cx, cy, deg) { const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r), dx = x - cx, dy = y - cy; return [cx + dx * c - dy * s, cy + dx * s + dy * c]; },

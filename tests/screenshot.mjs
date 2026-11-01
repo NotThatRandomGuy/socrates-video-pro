@@ -5,12 +5,12 @@ import path from 'node:path';
 const { evalJs, send, errors, done, sleep } = await launch();
 await evalJs(`(async () => {
   const cv = document.createElement('canvas'); cv.width = 640; cv.height = 360; const ctx = cv.getContext('2d');
-  const ac = AudioEngine.ctx(); await ac.resume(); const osc = ac.createOscillator(); osc.frequency.value = 220; const g = ac.createGain(); g.gain.value = .3; const dest = ac.createMediaStreamDestination(); osc.connect(g); g.connect(dest); osc.start();
+  const ac = AudioEngine.ctx(); await AudioEngine.ready(); const osc = ac.createOscillator(); osc.frequency.value = 220; const g = ac.createGain(); g.gain.value = .3; const dest = ac.createMediaStreamDestination(); osc.connect(g); g.connect(dest); osc.start();
   const lfo = ac.createOscillator(); lfo.frequency.value = 2; const lg = ac.createGain(); lg.gain.value = .3; lfo.connect(lg); lg.connect(g.gain); lfo.start();
-  const stream = cv.captureStream(30); dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
+  const stream = cv.captureStream(0); dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
   const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus' }); const chunks = []; rec.ondataavailable = e => chunks.push(e.data);
-  let f = 0; const iv = setInterval(() => { const gr = ctx.createLinearGradient(0,0,640,360); gr.addColorStop(0,'hsl('+(f*3%360)+',70%,45%)'); gr.addColorStop(1,'hsl('+((f*3+120)%360)+',70%,35%)'); ctx.fillStyle = gr; ctx.fillRect(0,0,640,360); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(320+Math.sin(f/10)*200, 180+Math.cos(f/13)*100, 40, 0, 7); ctx.fill(); f++; }, 33);
-  rec.start(); await new Promise(r => setTimeout(r, 3000)); rec.stop(); await new Promise(r => rec.onstop = r); clearInterval(iv); osc.stop(); lfo.stop();
+  let f = 0; const iv = setInterval(() => { const gr = ctx.createLinearGradient(0,0,640,360); gr.addColorStop(0,'hsl('+(f*3%360)+',70%,45%)'); gr.addColorStop(1,'hsl('+((f*3+120)%360)+',70%,35%)'); ctx.fillStyle = gr; ctx.fillRect(0,0,640,360); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(320+Math.sin(f/10)*200, 180+Math.cos(f/13)*100, 40, 0, 7); ctx.fill(); f++; stream.getVideoTracks()[0].requestFrame(); }, 33);
+  const started = new Promise(r => rec.onstart = r), stopped = new Promise(r => rec.onstop = r); rec.start(100); await started; await new Promise(r => setTimeout(r, 3000)); rec.stop(); await stopped; clearInterval(iv); osc.stop(); stream.getTracks().forEach(t => t.stop()); lfo.stop();
   const [m] = await Media.importFiles([new File(chunks, 'sample_footage.webm', { type: 'video/webm' })], { persist: false }); await m.audioReady;
   const c1 = await Cmd.addMedia(m.id, { start: 0 }); const c2 = await Cmd.addMedia(m.id, { start: clipEnd(c1) });
   c2.transitionIn = { type: 'dissolve', duration: .6 };
