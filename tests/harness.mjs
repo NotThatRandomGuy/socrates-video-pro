@@ -14,7 +14,7 @@ export async function launch({ port = 0, debugPort = 0, fileProtocol = false } =
   }).listen(port, '127.0.0.1');
   await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   port = server.address().port;
-  const chromePath = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(p => fs.existsSync(p));
+  const chromePath = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(p => fs.existsSync(p));
   if (!chromePath) throw new Error('Chrome not found');
   const userDir = fs.mkdtempSync(path.join(ROOT, 'tests', '.chrome-profile-'));
   const chrome = spawn(chromePath, ['--headless=new', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${userDir}`, '--no-first-run', '--window-size=1600,1000', 'about:blank'], { stdio: 'ignore' });

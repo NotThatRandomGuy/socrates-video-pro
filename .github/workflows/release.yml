@@ -62,9 +62,48 @@ jobs:
           path: |
             dist/*.AppImage
             dist/*.deb
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:mac -- --${{ matrix.arch }}
+      - name: Mount and verify the downloadable Mac app
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          image=(dist/*-macOS-"$EXPECTED_ARCH".dmg)
+          hdiutil verify "${image[0]}"
+          mount_dir="$(mktemp -d)"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "${image[0]}"
+          trap 'hdiutil detach "$mount_dir"' EXIT
+          bundle="$mount_dir/Socrates Video Pro.app"
+          binary="$bundle/Contents/MacOS/Socrates Video Pro"
+          codesign --verify --deep --strict --verbose=2 "$bundle"
+          arch="$(uname -m)"
+          lipo -verify_arch "$arch" "$binary"
+          "$binary" --smoke-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: dist/*-macOS-*.dmg
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [windows, linux]
+    needs: [windows, linux, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -80,4 +119,6 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" dist/*.exe dist/*.zip dist/*.AppImage dist/*.deb --draft --title "Socrates Video Pro $TAG" --notes-file CHANGELOG.md
+          awk -v version="${TAG#v}" '/^## / { if (found) exit; found = ($2 == version) } found' CHANGELOG.md > release-notes.md
+          test -s release-notes.md
+          gh release create "$TAG" dist/*.exe dist/*.zip dist/*.AppImage dist/*.deb dist/*.dmg --draft --title "Socrates Video Pro $TAG" --notes-file release-notes.md

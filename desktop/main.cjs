@@ -13,33 +13,46 @@ if (process.env.PORTABLE_EXECUTABLE_DIR) {
   fs.mkdirSync(data, { recursive: true }); app.setPath('userData', data);
 }
 const smoke = process.argv.includes('--smoke-test');
-app.setAppUserModelId('io.github.notthatrandomguy.socrates-video-pro');
+const isMac = process.platform === 'darwin';
+if (process.platform === 'win32') app.setAppUserModelId('io.github.notthatrandomguy.socrates-video-pro');
 if (smoke) { app.setPath('userData', path.join(app.getPath('temp'), 'socrates-smoke-' + process.pid)); app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required'); }
 let win;
+function supportsMacSystemAudio() {
+  const [major, minor] = process.getSystemVersion().split('.').map(Number);
+  return major > 14 || (major === 14 && minor >= 2);
+}
 async function createWindow() {
   const entry = pathToFileURL(path.join(__dirname, '..', 'index.html')).href;
   win = new BrowserWindow({ width: 1600, height: 1000, minWidth: 1000, minHeight: 700, show: !smoke, backgroundColor: '#10131b', icon: path.join(__dirname, '..', 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'), webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true } });
-  Menu.setApplicationMenu(null);
+  win.on('closed', () => { win = null; });
+  if (isMac) {
+    // Leave Command-M available for the editor's Export command.
+    Menu.setApplicationMenu(Menu.buildFromTemplate([
+      { role: 'appMenu' },
+      { role: 'editMenu' },
+      { label: 'Window', submenu: [{ role: 'close' }, { role: 'zoom' }, { role: 'front' }] }
+    ]));
+  } else Menu.setApplicationMenu(null);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => { if (url !== entry) event.preventDefault(); });
   win.webContents.on('will-prevent-unload', event => {
     if (smoke || dialog.showMessageBoxSync(win, { type: 'question', buttons: ['Keep editing', 'Discard and close'], defaultId: 0, cancelId: 0, message: 'Close without saving your project file?', detail: 'Save your project before closing if you need a portable backup.' }) === 1) event.preventDefault();
   });
-  session.defaultSession.setPermissionCheckHandler((contents, permission) => contents === win.webContents && ['media', 'display-capture', 'fullscreen'].includes(permission));
+  session.defaultSession.setPermissionCheckHandler((contents, permission) => contents === win?.webContents && !!win && ['media', 'display-capture', 'fullscreen'].includes(permission));
   session.defaultSession.setPermissionRequestHandler(async (contents, permission, callback) => {
-    if (contents !== win.webContents || !['media', 'display-capture', 'fullscreen'].includes(permission)) return callback(false);
+    if (!win || contents !== win.webContents || !['media', 'display-capture', 'fullscreen'].includes(permission)) return callback(false);
     if (permission === 'fullscreen') return callback(true);
     const result = await dialog.showMessageBox(win, { type: 'question', buttons: ['Allow', 'Cancel'], defaultId: 1, cancelId: 1, message: permission === 'media' ? 'Allow camera or microphone for recording?' : 'Allow screen capture?' }); callback(result.response === 0);
   });
   session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
     try {
-      if (request.frame.url !== entry) return callback({});
+      if (!win || request.frame?.url !== entry) return callback({});
       const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
       if (!sources.length) return callback({});
       // PipeWire has already shown the desktop portal's picker and returns one source.
       if (process.platform === 'linux' && sources.length === 1) return callback({ video: sources[0] });
       const result = await dialog.showMessageBox(win, { title: 'Choose what to record', message: 'Choose a screen or window to share', buttons: [...sources.map(s => s.name), 'Cancel'], cancelId: sources.length, defaultId: sources.length });
-      callback(result.response < sources.length ? { video: sources[result.response], ...(process.platform === 'win32' && request.audioRequested ? { audio: 'loopback' } : {}) } : {});
+      callback(result.response < sources.length ? { video: sources[result.response], ...((process.platform === 'win32' || (isMac && supportsMacSystemAudio())) && request.audioRequested ? { audio: 'loopback' } : {}) } : {});
     } catch { callback({}); }
   }, { useSystemPicker: true });
   await win.loadURL(entry);
@@ -63,4 +76,7 @@ async function createWindow() {
   }
 }
 app.whenReady().then(createWindow).catch(error => { console.error(error); app.exit(1); });
-app.on('window-all-closed', () => app.quit());
+app.on('activate', () => {
+  if (app.isReady() && !win) createWindow().catch(error => { console.error(error); app.exit(1); });
+});
+app.on('window-all-closed', () => { if (!isMac) app.quit(); });

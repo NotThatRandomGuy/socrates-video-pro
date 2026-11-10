@@ -1,7 +1,7 @@
 {
   "name": "socrates-video-pro",
-  "version": "1.1.0",
-  "description": "A private, local video editing studio for the web, Windows, and Linux",
+  "version": "1.2.0",
+  "description": "A local video editing studio for the web, Windows, Linux, and macOS",
   "author": "NotThatRandomGuy",
   "license": "MIT",
   "private": true,
@@ -18,7 +18,8 @@
     "build:web": "node scripts/build-web.mjs",
     "build:win": "electron-builder --win nsis portable --x64 --publish never",
     "build:linux": "electron-builder --linux AppImage deb --x64 --publish never",
-    "build:win:signed": "node scripts/build-signed.cjs"
+    "build:win:signed": "node scripts/build-signed.cjs",
+    "build:mac": "electron-builder --mac dmg --publish never"
   },
   "devDependencies": {
     "electron": "44.10.1",
@@ -86,6 +87,22 @@
         "libasound2 | libasound2t64",
         "libgbm1"
       ]
+    },
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        "dmg"
+      ],
+      "minimumSystemVersion": "13.0",
+      "icon": "assets/icon.icns",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "artifactName": "Socrates-Video-Pro-${version}-macOS-${arch}.${ext}",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Use the camera when you choose Webcam recording.",
+        "NSMicrophoneUsageDescription": "Use the microphone for voice-over, webcam, or screen recording.",
+        "NSAudioCaptureUsageDescription": "Include system audio when you choose screen recording."
+      }
     }
   },
   "desktopName": "socrates-video-pro.desktop"
