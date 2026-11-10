@@ -94,7 +94,7 @@ jobs:
           binary="$bundle/Contents/MacOS/Socrates Video Pro"
           codesign --verify --deep --strict --verbose=2 "$bundle"
           arch="$(uname -m)"
-          lipo -verify_arch "$arch" "$binary"
+          lipo "$binary" -verify_arch "$arch"
           "$binary" --smoke-test
       - run: npm test
       - uses: actions/upload-artifact@v4
