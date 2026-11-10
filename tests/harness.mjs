@@ -1,17 +1,13 @@
 // Shared headless-Chrome harness (CDP over WebSocket, no dependencies).
 import { spawn } from 'node:child_process';
-import http from 'node:http';
+import { createEditorServer } from '../scripts/static-server.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export async function launch({ port = 0, debugPort = 0, fileProtocol = false } = {}) {
   const ROOT = path.resolve(import.meta.dirname, '..');
-  const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png' };
-  const server = http.createServer((req, res) => {
-    const p = path.join(ROOT, decodeURIComponent(req.url.split('?')[0] === '/' ? '/index.html' : req.url.split('?')[0]));
-    fs.readFile(p, (e, d) => { if (e) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'Content-Type': MIME[path.extname(p)] || 'application/octet-stream' }); res.end(d); });
-  }).listen(port, '127.0.0.1');
+  const server = createEditorServer().listen(port, '127.0.0.1');
   await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   port = server.address().port;
   const chromePath = ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(p => fs.existsSync(p));
@@ -38,6 +34,13 @@ export async function launch({ port = 0, debugPort = 0, fileProtocol = false } =
   }
   const results = [];
   const check = async (name, expr) => { console.log('Checking: ' + name); try { const v = await evalJs(expr); if (v !== true) console.log('Editor status:', await evalJs("[...document.querySelectorAll('.toast')].map(el => el.textContent).join(' | ')")); results.push([name, v === true ? 'PASS' : 'FAIL: ' + JSON.stringify(v)]); } catch (e) { results.push([name, 'ERROR: ' + e.message]); } };
-  const done = () => { ws.close(); chrome.kill(); server.close(); setTimeout(() => { if (!path.resolve(userDir).startsWith(path.join(ROOT, 'tests', '.chrome-profile-'))) throw Error('Unexpected profile path'); fs.rm(userDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }, () => {}); }, 500); };
+  const done = async () => {
+    const exited = new Promise(resolve => chrome.exitCode !== null || chrome.signalCode ? resolve() : chrome.once('exit', resolve));
+    ws.send(JSON.stringify({ id: ++id, method: 'Browser.close' }));
+    const fallback = setTimeout(() => chrome.kill(), 4000);
+    await exited; clearTimeout(fallback); ws.close(); server.close();
+    if (path.dirname(userDir) !== path.join(ROOT, 'tests') || !path.basename(userDir).startsWith('.chrome-profile-')) throw Error('Unexpected profile path');
+    await fs.promises.rm(userDir, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 });
+  };
   return { evalJs, check, results, logs, errors, done, sleep, send };
 }

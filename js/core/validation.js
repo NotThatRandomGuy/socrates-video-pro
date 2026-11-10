@@ -20,7 +20,7 @@ const ProjectValidation = (() => {
     Model.normalizeProject(p);
     const number = (v, min, max, name) => { if (!Number.isFinite(v) || v < min || v > max) throw Error('Invalid ' + name); };
     number(p.width, 2, 8192, 'canvas width'); number(p.height, 2, 8192, 'canvas height'); number(p.fps, 1, 120, 'frame rate');
-    if (!Number.isInteger(p.width) || !Number.isInteger(p.height) || !Number.isInteger(p.fps)) throw Error('Canvas dimensions and frame rate must be whole numbers');
+    if (!Number.isInteger(p.width) || !Number.isInteger(p.height)) throw Error('Canvas dimensions must be whole numbers');
     if (typeof p.name !== 'string' || typeof p.background !== 'string' || !Array.isArray(p.markers)) throw Error('Invalid project properties');
     if (p.canvasCrop) {
       const c = p.canvasCrop; number(c.sourceWidth, p.width, 8192, 'original width'); number(c.sourceHeight, p.height, 8192, 'original height');
@@ -41,8 +41,19 @@ const ProjectValidation = (() => {
       for (const c of t.clips) {
         identity(c.id); if (!CLIP_KINDS.includes(c.kind) || (t.kind === 'audio') !== (c.kind === 'audio')) throw Error('Clip is on an incompatible track');
         shape(c, Model.newClip(c.kind), 'clip');
-        number(c.start, 0, 864000, 'clip start'); number(c.duration, 1 / 1000, 864000, 'clip duration'); number(c.speed, .05, 16, 'speed'); number(c.offset, 0, 864000, 'source offset'); number(c.sourceDuration, 0, 864000, 'source duration');
-        for (const fx of c.effects) { if (!fx || !EFFECT_DEFS[fx.type]) throw Error('Unknown effect'); shape(fx, Model.newEffect(fx.type), 'effect'); }
+        number(c.start, 0, 864000, 'clip start'); number(c.duration, Number.MIN_VALUE, 864000, 'clip duration'); number(c.speed, .05, 16, 'speed'); number(c.offset, 0, 864000, 'source offset'); number(c.sourceDuration, 0, 864000, 'source duration');
+        if (c.linkId !== null && typeof c.linkId !== 'string') throw Error('Invalid clip link');
+        if (c.shape) {
+          number(c.shape.points, 3, 512, 'shape point count');
+          number(c.shape.width, 1, 8192, 'shape width'); number(c.shape.height, 1, 8192, 'shape height');
+        }
+        for (const [value, keys] of [[c.shape, ['fill','fill2']], [c.solid, ['color','color2']], [c.text, ['color','color2']]]) {
+          if (value?.gradient && keys.some(k => !CSS.supports('color', value[k]))) throw Error('Invalid gradient color');
+        }
+        const effectIds = new Set();
+        for (const fx of c.effects) { if (!fx || !Object.hasOwn(EFFECT_DEFS, fx.type)) throw Error('Unknown effect'); shape(fx, Model.newEffect(fx.type), 'effect');
+          if (!fx.id || effectIds.has(fx.id)) throw Error('Duplicate or missing effect identifier');
+          effectIds.add(fx.id); }
         for (const [path, keys] of Object.entries(c.keyframes)) {
           if (!KF.KEYABLE.includes(path) && !/^fx\.[\w-]+\.[\w]+$/.test(path)) throw Error('Invalid animated property');
           if (!Array.isArray(keys)) throw Error('Invalid keyframes');
@@ -55,7 +66,13 @@ const ProjectValidation = (() => {
     for (const edge of ['inPoint', 'outPoint']) if (p[edge] !== null) number(p[edge], 0, 864000, edge);
     if (p.inPoint !== null && p.outPoint !== null && p.outPoint <= p.inPoint) throw Error('Out point must follow In point');
     if (copy.media !== undefined && !Array.isArray(copy.media)) throw Error('Invalid media list');
-    for (const m of copy.media || []) if (!m || typeof m.id !== 'string' || typeof m.name !== 'string' || !['video','audio','image'].includes(m.type)) throw Error('Invalid media reference');
+    const mediaIds = new Set();
+    for (const m of copy.media || []) {
+      if (!m || typeof m.id !== 'string' || !m.id || mediaIds.has(m.id) || typeof m.name !== 'string' || !['video','audio','image'].includes(m.type)) throw Error('Invalid media reference');
+      mediaIds.add(m.id);
+      if (m.tags !== undefined && (!Array.isArray(m.tags) || m.tags.some(t => typeof t !== 'string'))) throw Error('Invalid media tags');
+      for (const key of ['width','height','duration','size']) if (m[key] !== undefined) number(m[key], 0, Number.MAX_SAFE_INTEGER, 'media ' + key);
+    }
     return copy;
   }
   return { validate };

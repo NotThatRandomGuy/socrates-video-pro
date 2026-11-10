@@ -74,4 +74,4 @@ await check('kf button adds keyframe', `KF.allTimes(A).length === 1`);
 console.log('\n=== INTERACTION RESULTS ===');
 for (const [n, res] of results) console.log(`${res.startsWith('PASS') ? 'OK ' : 'XX '} ${n}: ${res}`);
 console.log('\n=== ERRORS ==='); console.log(errors.length ? errors.join('\n') : '(none)');
-done(); process.exit(results.some(x => !x[1].startsWith('PASS')) || errors.length ? 1 : 0);
+await done(); process.exit(results.some(x => !x[1].startsWith('PASS')) || errors.length ? 1 : 0);

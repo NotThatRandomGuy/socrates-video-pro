@@ -194,8 +194,9 @@ const Timeline = (() => {
     const cEl = e.target.closest('.clip'); const t = x2t(localX(e));
     if (state.tool === 'razor') { if (cEl) { const c = findClip(cEl.dataset.id); Cmd.splitAt(snapT(t), [c.id, ...Cmd.linkedOf(c).map(l => l.id)]); } e.preventDefault(); return; }
     if (state.tool === 'hand' || e.button === 1) { startPan(e); return; }
-    if (!cEl) { if (!e.shiftKey && !e.ctrlKey) Cmd.deselect(); startMarquee(e); return; }
-    const clip = findClip(cEl.dataset.id); const track = findTrackOfClip(clip.id); if (!clip) return;
+    if (!cEl) { if (!e.shiftKey && !e.ctrlKey && !e.metaKey) Cmd.deselect(); startMarquee(e); return; }
+    const clip = findClip(cEl.dataset.id); if (!clip) return;
+    const track = findTrackOfClip(clip.id);
     if (e.ctrlKey || e.metaKey) { Cmd.select(clip.id, { toggle: true, followLinks: !e.altKey }); return; }
     if (e.shiftKey) { Cmd.select(clip.id, { add: true, followLinks: !e.altKey }); }
     else if (!state.selection.has(clip.id)) Cmd.select(clip.id, { followLinks: !e.altKey });
@@ -250,25 +251,40 @@ const Timeline = (() => {
     if (!d.moved) { History.cancel(); return; }
     if (d.mode === 'move') {
       if (d.altCopy) { // alt-drag duplicates: restore originals, place copies
-        const copies = []; for (const it of d.items) { const tr = findTrackOfClip(it.c.id); const copy = U.deepClone(it.c); copy.id = U.uid('c'); copy.linkId = null; const s = it.c.start; it.c.start = it.start; const cur = findTrackOfClip(it.c.id); if (cur !== it.track) { cur.clips.splice(cur.clips.indexOf(it.c), 1); it.track.clips.push(it.c); } copy.start = s; copies.push({ copy, tr }); }
-        copies.forEach(({ copy, tr }) => Cmd.placeClip(copy, tr, copy.start, state.ripple ? 'insert' : 'overwrite')); state.selection = new Set(copies.map(x => x.copy.id));
+        const copies = [], links = new Map(); for (const it of d.items) { const tr = findTrackOfClip(it.c.id); const copy = U.deepClone(it.c); copy.id = U.uid('c'); if (copy.linkId) { if (!links.has(copy.linkId)) links.set(copy.linkId, U.uid('ln')); copy.linkId = links.get(copy.linkId); } const s = it.c.start; it.c.start = it.start; const cur = findTrackOfClip(it.c.id); if (cur !== it.track) { cur.clips.splice(cur.clips.indexOf(it.c), 1); it.track.clips.push(it.c); } copy.start = s; copies.push({ copy, tr }); }
+        if (state.ripple) {
+          const start = Math.min(...copies.map(({copy}) => copy.start));
+          Cmd.insertSpace(start, Math.max(...copies.map(({copy}) => clipEnd(copy))) - start);
+        }
+        copies.forEach(({ copy, tr }) => Cmd.placeClip(copy, tr, copy.start, 'overwrite')); state.selection = new Set(copies.map(x => x.copy.id));
       } else {
         const moving = new Set(d.items.map(i => i.c));
-        if (state.ripple) { // insert: shift others at the drop point
-          for (const it of d.items) { const tr = findTrackOfClip(it.c.id); const others = tr.clips.filter(c => !moving.has(c) && c.start < clipEnd(it.c) && clipEnd(c) > it.c.start); if (others.length) Cmd.shiftAfter(Math.min(...others.map(o => o.start)), it.c.duration); }
-        } else { for (const it of d.items) { const tr = findTrackOfClip(it.c.id); overwriteExcept(tr, it.c, moving); } }
+        if (state.ripple) {
+          const start = Math.min(...d.items.map(it => it.c.start));
+          const end = Math.max(...d.items.map(it => clipEnd(it.c)));
+          Cmd.insertSpace(start, end - start, moving);
+        } else {
+          for (const {c} of d.items) Cmd.overwriteRange(findTrackOfClip(c.id), c.start, clipEnd(c), moving);
+        }
       }
     } else if (state.ripple) { // ripple trim: shift following clips by the change in duration
-      const it = d.items.find(i => i.c === d.primary); const delta = it.c.duration - it.dur; if (d.mode === 'trimR' && Math.abs(delta) > 1e-6) Cmd.shiftAfter(it.start + it.dur + 1e-6, delta); if (d.mode === 'trimL' && Math.abs(delta) > 1e-6) { Cmd.shiftAfter(it.start - 1e-6, -delta); }
+      const primary = d.items.find(item => item.c === d.primary);
+      const delta = primary.c.duration - primary.dur;
+      if (Math.abs(delta) > 1e-6) {
+        if (d.mode === 'trimL') {
+          for (const item of d.items) if (Math.abs(item.start - primary.start) < .02) item.c.start = item.start;
+        }
+        Cmd.shiftAfter(primary.start + primary.dur, delta);
+      }
     }
     P().tracks.forEach(t => t.clips.sort((a, b) => a.start - b.start));
     History.commit(); recalcDuration(); Events.emit('project:changed'); Events.emit('selection:changed');
   }
-  function overwriteExcept(track, clip, moving) { for (const o of track.clips.slice()) { if (moving.has(o) || o === clip) continue; if (o.start < clipEnd(clip) && clipEnd(o) > clip.start) Cmd.overwriteRange(track, clip.start, clipEnd(clip), clip); } }
 
   function startMarquee(e) {
-    const x0 = localX(e), y0 = localY(e); let moved = false; const was = state.playing;
-    const mv = (ev) => { const x1 = localX(ev), y1 = localY(ev); if (!moved && Math.hypot(x1 - x0, y1 - y0) < 4) return; moved = true; marqueeEl.style.display = 'block'; const l = Math.min(x0, x1), t = Math.min(y0, y1), w = Math.abs(x1 - x0), h = Math.abs(y1 - y0); Object.assign(marqueeEl.style, { left: l + 'px', top: (t + RULER_H) + 'px', width: w + 'px', height: h + 'px' }); const ta = x2t(l), tb = x2t(l + w); const ids = []; let acc = 0; for (const tr of displayTracks()) { const th = trackH(tr); if (acc < t + h && acc + th > t) tr.clips.forEach(c => { if (c.start < tb && clipEnd(c) > ta) ids.push(c.id); }); acc += th; } Cmd.select(ids, { add: e.shiftKey, followLinks: false }); };
+    const x0 = localX(e), y0 = localY(e); let moved = false;
+    const original = e.shiftKey || e.metaKey || e.ctrlKey ? [...state.selection] : [];
+    const mv = (ev) => { const x1 = localX(ev), y1 = localY(ev); if (!moved && Math.hypot(x1 - x0, y1 - y0) < 4) return; moved = true; marqueeEl.style.display = 'block'; const l = Math.min(x0, x1), t = Math.min(y0, y1), w = Math.abs(x1 - x0), h = Math.abs(y1 - y0); Object.assign(marqueeEl.style, { left: l + 'px', top: (t + RULER_H) + 'px', width: w + 'px', height: h + 'px' }); const ta = x2t(l), tb = x2t(l + w); const ids = []; let acc = 0; for (const tr of displayTracks()) { const th = trackH(tr); if (acc < t + h && acc + th > t) tr.clips.forEach(c => { if (c.start < tb && clipEnd(c) > ta) ids.push(c.id); }); acc += th; } Cmd.select([...original, ...ids], { followLinks: false }); };
     const up = (ev) => { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); marqueeEl.style.display = 'none'; if (!moved) { Player.seek(snapT(x2t(x0), false)); } };
     window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up); e.preventDefault();
   }
@@ -282,7 +298,21 @@ const Timeline = (() => {
     if (mediaId) { await Cmd.addMedia(mediaId, { trackId: track ? track.id : null, start: t }); return; }
     if (fxType && cEl) { Cmd.addEffect([cEl.dataset.id], fxType); Cmd.select(cEl.dataset.id); return; }
     if (transType && cEl) { const c = findClip(cEl.dataset.id); const rel = (x2t(localX(e)) - c.start) / c.duration; Cmd.setTransition([c.id], rel < .5 ? 'in' : 'out', transType, .6); return; }
-    if (gen) { let g; try { g = JSON.parse(gen); } catch { return UI.toast('Invalid dragged item'); } if (!CLIP_KINDS.includes(g.kind)) return; Cmd.addGenerated(g.kind, g.over || {}, { start: t, duration: g.duration || 5, name: g.name }); return; }
+    if (gen) {
+      try {
+        const g = JSON.parse(gen);
+        if (!['text','shape','solid','sticker','adjustment'].includes(g?.kind)) throw Error();
+        const duration = g.duration ?? 5, over = g.over ?? {};
+        const sample = Model.newClip(g.kind, { name: g.name ?? g.kind, duration });
+        for (const [key, props] of Object.entries(over)) {
+          if (![g.kind, 'transform'].includes(key) || !sample[key] || !props || Array.isArray(props) || typeof props !== 'object') throw Error();
+          sample[key] = { ...sample[key], ...props };
+        }
+        ProjectValidation.validate({ project: { tracks: [{ ...Model.newTrack('video'), clips: [sample] }] } });
+        Cmd.addGenerated(g.kind, over, { start: t, duration, name: g.name });
+      } catch { UI.toast('Invalid dragged item'); }
+      return;
+    }
     const files = Array.from(e.dataTransfer.files || []); if (files.length) { const added = await Media.importFiles(files); let st = t; for (const m of added) { const c = await Cmd.addMedia(m.id, { trackId: track ? track.id : null, start: st }); if (c) st = clipEnd(c); } }
   }
 

@@ -25,4 +25,4 @@ await sleep(800);
 const shot = await send('Page.captureScreenshot', { format: 'png' });
 fs.writeFileSync(path.join(import.meta.dirname, 'screenshot.png'), Buffer.from(shot.result.data, 'base64'));
 console.log('saved tests/screenshot.png', errors.length ? errors : 'no errors');
-done();
+await done();

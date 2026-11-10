@@ -116,13 +116,27 @@ const Media = (() => {
 
   /* grab a single frame from a video media at time t (uses a dedicated scratch element) */
   const scratch = new Map();
+  const frameJobs = new Map();
   function grabFrame(m, t, maxW = 320) {
+    if (!m?.url) return Promise.resolve(null);
+    // A single decoder cannot seek to two timestamps at once.
+    const prior = frameJobs.get(m) || Promise.resolve();
+    const job = prior.then(() => readFrame(m, t, maxW));
+    frameJobs.set(m, job);
+    return job.finally(() => { if (frameJobs.get(m) === job) frameJobs.delete(m); });
+  }
+  function readFrame(m, t, maxW) {
     return new Promise((res) => {
       if (!m.el || m.type !== 'video') return res(null);
       let v = scratch.get(m.id); if (!v) { v = document.createElement('video'); v.src = m.url; v.muted = true; v.preload = 'auto'; scratch.set(m.id, v); }
       const done = () => { v.removeEventListener('seeked', done); clearTimeout(to); try { const s = Math.min(1, maxW / (v.videoWidth || 1)); const cv = document.createElement('canvas'); cv.width = Math.max(2, Math.round(v.videoWidth * s)); cv.height = Math.max(2, Math.round(v.videoHeight * s)); cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height); res(cv); } catch (e) { res(null); } };
-      const to = setTimeout(() => { v.removeEventListener('seeked', done); res(null); }, 4000);
-      const go = () => { v.addEventListener('seeked', done); v.currentTime = Math.max(0, Math.min(t, (v.duration || t) - .05)); };
+      const to = setTimeout(() => { v.onloadedmetadata = null; v.removeEventListener('seeked', done); res(null); }, 4000);
+      const go = () => {
+        v.onloadedmetadata = null;
+        const at = Number.isFinite(v.duration) ? U.clamp(t, 0, Math.max(0, v.duration - .001)) : Math.max(0, t);
+        if (v.readyState >= 2 && !v.seeking && Math.abs(v.currentTime - at) < .0005) return done();
+        v.addEventListener('seeked', done); v.currentTime = at;
+      };
       if (v.readyState >= 1) go(); else v.onloadedmetadata = go;
     });
   }
@@ -143,10 +157,22 @@ const Media = (() => {
     scratch.delete(id); DB.delFile(id); Events.emit('media:changed');
   }
 
+  function restoreEntry({ id, item, index }) {
+    if (findMedia(id)) remove(id);
+    if (!item) return;
+    if (item.file) {
+      item.url = URL.createObjectURL(item.file);
+      if (item.el) item.el.src = item.url;
+      DB.putFile(id, { name: item.name, type: item.file.type, blob: item.file, tags: item.tags });
+    }
+    state.media.splice(Math.max(0, index), 0, item);
+    Events.emit('media:changed');
+  }
+
   /* per-clip video element so the same media can appear multiple times simultaneously */
   function clipVideo(clip) {
     let v = clipEls.get(clip.id);
-    const m = findMedia(clip.mediaId); if (!m || m.type !== 'video') return null;
+    const m = findMedia(clip.mediaId); if (!m?.url || m.type !== 'video') return null;
     if (!v) { v = document.createElement('video'); v.src = m.url; v.muted = true; v.preload = 'auto'; v.playsInline = true; clipEls.set(clip.id, v); v.load(); }
     return v;
   }
@@ -158,7 +184,7 @@ const Media = (() => {
   async function restore() {
     try {
       const recs = await DB.allFiles();
-      for (const r of recs) { const f = new File([r.blob], r.name, { type: r.type }); await importFiles([f], { persist: false, id: r.id }); const m = findMedia(r.id); if (m && r.tags) m.tags = r.tags; }
+      for (const r of recs) { if (!(r.blob instanceof Blob)) continue; const f = new File([r.blob], r.name, { type: r.type }); await importFiles([f], { persist: false, id: r.id }); const m = findMedia(r.id); if (m && r.tags) m.tags = r.tags; }
     } catch (e) { console.warn('restore media', e); }
   }
 
@@ -178,5 +204,5 @@ const Media = (() => {
   /* placeholder media entry for a project loaded without its files */
   function placeholder(id, name, type) { const m = { id, name, type, url: '', file: null, size: 0, duration: 0, width: 0, height: 0, el: null, audioBuffer: null, peaks: null, thumb: null, missing: true, tags: [] }; state.media.push(m); return m; }
 
-  return { importFiles, remove, clipVideo, releaseClip, gcClipEls, allClipEls, grabFrame, filmstrip, drawPeaks, restore, relink, placeholder, typeOf, computePeaks };
+  return { importFiles, remove, restoreEntry, clipVideo, releaseClip, gcClipEls, allClipEls, grabFrame, filmstrip, drawPeaks, restore, relink, placeholder, typeOf, computePeaks };
 })();

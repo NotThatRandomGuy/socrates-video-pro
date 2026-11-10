@@ -50,9 +50,14 @@ const Recorder = (() => {
     finally { if (rec && rec.state !== 'inactive') { try { rec.stop(); } catch {} } clearInterval(interval); stopMeter?.(); stream.getTracks().forEach(t => t.stop()); cleanup(); modal.abort(); if (playbackStarted) Player.pause(); recording = false; }
   }
   function mixAudio(stream, mic) {
-    const ac = AudioEngine.ctx(); ac.resume(); const dest = ac.createMediaStreamDestination(), original = stream.getAudioTracks(), nodes = [];
-    if (original.length) { const src = ac.createMediaStreamSource(new MediaStream(original)); src.connect(dest); nodes.push(src); }
-    const src = ac.createMediaStreamSource(mic); src.connect(dest); nodes.push(src);
+    const ac = AudioEngine.ctx(); const dest = ac.createMediaStreamDestination(), original = stream.getAudioTracks(), nodes = [];
+    try {
+      if (original.length) { const src = ac.createMediaStreamSource(new MediaStream(original)); nodes.push(src); src.connect(dest); }
+      const src = ac.createMediaStreamSource(mic); nodes.push(src); src.connect(dest);
+    } catch (error) {
+      nodes.forEach(n => n.disconnect()); dest.stream.getTracks().forEach(t => t.stop());
+      throw error;
+    }
     original.forEach(t => stream.removeTrack(t)); dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
     return () => { nodes.forEach(n => n.disconnect()); [...original, ...mic.getTracks(), ...dest.stream.getTracks()].forEach(t => t.stop()); };
   }
@@ -60,7 +65,7 @@ const Recorder = (() => {
     let stream, cleanup = () => {};
     try {
       stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 60 }, audio: true });
-      if (await UI.confirm('Microphone', 'Also record your microphone?', 'Yes')) { try { cleanup = mixAudio(stream, await navigator.mediaDevices.getUserMedia({ audio: true })); } catch { UI.toast('Microphone unavailable'); } }
+      if (await UI.confirm('Microphone', 'Also record your microphone?', 'Yes')) { let mic; try { await AudioEngine.ready(); mic = await navigator.mediaDevices.getUserMedia({ audio: true }); cleanup = mixAudio(stream, mic); } catch { mic?.getTracks().forEach(t => t.stop()); UI.toast('Microphone unavailable'); } }
       return await record(stream, { name: 'Screen recording', kind: 'video', live: true, cleanup });
     } catch { stream?.getTracks().forEach(t => t.stop()); cleanup(); UI.toast('Screen capture cancelled or unavailable'); }
   }

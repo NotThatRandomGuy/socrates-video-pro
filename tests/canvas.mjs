@@ -57,5 +57,5 @@ await check('cropped WebM export includes playable video', `(async () => {let bl
 await check('solid can be hit-tested', `(() => {Cmd.resetCanvasCrop();const c=Cmd.addGenerated('solid');return Compositor.hitTest(960,540,0)?.id===c.id;})()`);
 await check('solo prevents selecting invisible clips', `(() => {const s=allClips().find(c=>c.kind==='solid');findTrackOfClip(clipId).solo=true;return Compositor.hitTest(960,540,0)?.id!==s.id;})()`);
 for(const [name,result] of results) console.log(`${result}: ${name}`);
-console.log('Console errors:', errors.length ? errors : '(none)');done();
+console.log('Console errors:', errors.length ? errors : '(none)');await done();
 process.exit(results.some(([,r])=>r!=='PASS')||errors.length?1:0);

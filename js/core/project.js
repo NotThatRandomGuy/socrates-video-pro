@@ -6,7 +6,7 @@
 const Project = (() => {
   const AUTOSAVE_KEY = 'autosave';
   function serialize() {
-    return { app: 'VideoEditorPro', version: 2, savedAt: Date.now(), project: state.project, media: state.media.map(m => ({ id: m.id, name: m.name, type: m.type, duration: m.duration, width: m.width, height: m.height, size: m.size, tags: m.tags || [] })), view: { pxPerSec: state.pxPerSec, currentTime: state.currentTime }, luts: Compositor.exportLUTs() };
+    return { app: 'VideoEditorPro', version: 2, savedAt: Date.now(), project: state.project, media: state.media.map(m => ({ id: m.id, name: m.name, type: m.type, duration: m.duration ?? 0, width: m.width ?? 0, height: m.height ?? 0, size: m.size ?? 0, tags: m.tags || [] })), view: { pxPerSec: state.pxPerSec, currentTime: state.currentTime }, luts: Compositor.exportLUTs() };
   }
   async function load(data, { keepMedia = true } = {}) {
     data = ProjectValidation.validate(data);
@@ -15,7 +15,7 @@ const Project = (() => {
     for (const id of [...Media.allClipEls().keys()]) Media.releaseClip(id);
     AudioEngine.resetMedia(); Compositor.restoreLUTs(data.luts);
     // media: anything referenced but not present becomes a placeholder to relink
-    for (const md of data.media || []) { if (!findMedia(md.id)) { const ph = Media.placeholder(md.id, md.name, md.type); Object.assign(ph, { duration: md.duration, width: md.width, height: md.height }); } }
+    for (const md of data.media || []) { if (!findMedia(md.id)) { const ph = Media.placeholder(md.id, md.name, md.type); Object.assign(ph, { duration: md.duration ?? 0, width: md.width ?? 0, height: md.height ?? 0, size: md.size ?? 0, tags: md.tags || [] }); } }
     state.currentTime = 0;
     if (data.view) { if (Number.isFinite(data.view.pxPerSec)) state.pxPerSec = U.clamp(data.view.pxPerSec, 1, 1500); if (Number.isFinite(data.view.currentTime)) state.currentTime = Math.max(0, data.view.currentTime); }
     Media.gcClipEls(); Compositor.clearCaches(); recalcDuration(); state.dirty = false;
@@ -36,7 +36,7 @@ const Project = (() => {
   /* autosave */
   const autosave = U.debounce(async () => { if (!state.autosave) return; try { await DB.set(AUTOSAVE_KEY, serialize()); } catch (e) { } }, 1500);
   async function restoreAutosave() {
-    try { const data = await DB.get(AUTOSAVE_KEY); if (data && data.project && (data.project.tracks || []).some(t => t.clips.length)) { await load(data); state.dirty = false; return true; } } catch (e) { console.warn('autosave restore', e); }
+    try { const data = await DB.get(AUTOSAVE_KEY); if (data?.project) { await load(data); state.dirty = false; return true; } } catch (e) { console.warn('autosave restore', e); }
     return false;
   }
   function init() { Events.on('project:changed', autosave); Events.on('history:changed', autosave); window.addEventListener('beforeunload', (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ''; } }); }

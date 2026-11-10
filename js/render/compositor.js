@@ -40,6 +40,24 @@ const Compositor = (() => {
     ctx.restore();
   }
 
+  // An incoming transition can continue showing the previous clip past its timeline end.
+  function visibleSpans() {
+    const tracks = videoTracks();
+    const solo = tracks.some(track => track.solo);
+    const spans = [];
+    for (const track of tracks) {
+      if (track.hidden || (solo && !track.solo)) continue;
+      const clips = track.clips.slice().sort((a,b) => a.start - b.start);
+      clips.forEach((clip, i) => {
+        if (!clip.enabled) return;
+        const next = clips[i + 1], end = clipEnd(clip);
+        const overlap = next?.enabled && next.transitionIn.type !== 'none' && Math.abs(end - next.start) < .02;
+        spans.push({ clip, end: overlap ? Math.max(end, next.start + Math.min(next.transitionIn.duration, next.duration)) : end });
+      });
+    }
+    return spans;
+  }
+
   function renderTrack(ctx, track, t, W, H, opts) {
     const clips = track.clips.slice().sort((a, b) => a.start - b.start);
     for (let i = 0; i < clips.length; i++) {
@@ -148,7 +166,7 @@ const Compositor = (() => {
   function resolveEffects(clip, lt) {
     const out = []; for (const fx of clip.effects || []) {
       if (!fx.enabled) continue; const def = EFFECT_DEFS[fx.type]; if (!def) continue;
-      const p = {}; for (const k of Object.keys(def.params)) p[k] = KF.fxValue(clip, fx, k, lt);
+      const p = {}; for (const [k, limits] of Object.entries(def.params)) p[k] = U.clamp(KF.fxValue(clip, fx, k, lt), limits.min, limits.max);
       const r = { type: fx.type, p, color: fx.params.keyColor || fx.params.color, id: fx.id };
       if (fx.type === 'lut') { const rec = lutStore.get(fx.lut); r.lut = rec ? GLFX.loadLUT(fx.lut, rec) : null; }
       out.push(r);
@@ -269,7 +287,8 @@ const Compositor = (() => {
       }
       // per-char metrics
       const out = lines.map((line, li) => { let x = 0; const chars = [...line].map((ch) => { const w = mctx.measureText(ch).width; const c = { ch, x, w, i: idx++, line: li }; x += w + ls; return c; }); return { chars, width: Math.max(0, x - ls), text: line }; });
-      const totalChars = idx; let wi = 0; out.forEach(l => l.chars.forEach(c => { if (c.ch === ' ') wi++; c.word = wi; }));
+      const totalChars = idx; let wi = 0;
+      out.forEach((line, i) => { if (i) wi++; line.chars.forEach(c => { if (c.ch === ' ') wi++; c.word = wi; }); });
       return { lines: out, totalChars, totalWords: wi + 1 };
     }
     /* per-char animation state: {alpha, dx, dy, scale, blur} */
@@ -306,7 +325,7 @@ const Compositor = (() => {
       if (textCache.has(key)) return textCache.get(key);
       const L = layout(tx, size, ls);
       const lh = size * (tx.lineHeight || 1.2);
-      const textW = Math.max(1, ...L.lines.map(l => l.width), tx.boxWidth > 0 ? tx.boxWidth : 0), textH = L.lines.length * lh;
+      const textW = L.lines.reduce((width, line) => Math.max(width, line.width), Math.max(1, tx.boxWidth || 0)), textH = L.lines.length * lh;
       const pad = tx.bgPadding || 0, margin = Math.ceil((tx.shadowBlur || 0) + Math.abs(tx.shadowX || 0) + Math.abs(tx.shadowY || 0) + (tx.strokeWidth || 0) + size * .6 + pad + 30);
       const W = Math.ceil(textW + margin * 2), H = Math.ceil(textH + margin * 2);
       if (W > 8192 || H > 8192) return null;
@@ -356,6 +375,7 @@ const Compositor = (() => {
   const ShapeRenderer = (() => {
     function render(clip, e) {
       const s = clip.shape; const w = Math.max(2, e.shapeW), h = Math.max(2, e.shapeH); const sw = s.strokeWidth || 0; const m = sw + 4;
+      if (w + m * 2 > 16384 || h + m * 2 > 16384) return null;
       const cv = off(); cv.width = Math.ceil(w + m * 2); cv.height = Math.ceil(h + m * 2); const c = cv.getContext('2d');
       c.translate(m, m);
       let fill = s.fill;
@@ -366,8 +386,8 @@ const Compositor = (() => {
         case 'rect': roundRectPath(c, 0, 0, w, h, s.radius || 0); break;
         case 'ellipse': c.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); break;
         case 'triangle': c.moveTo(w / 2, 0); c.lineTo(w, h); c.lineTo(0, h); c.closePath(); break;
-        case 'star': { const n = Math.max(3, s.points || 5), R = Math.min(w, h) / 2, r = R * .45; for (let i = 0; i < n * 2; i++) { const a = -Math.PI / 2 + i * Math.PI / n, rr = i % 2 ? r : R; c.lineTo(w / 2 + Math.cos(a) * rr, h / 2 + Math.sin(a) * rr); } c.closePath(); break; }
-        case 'polygon': { const n = Math.max(3, s.points || 6), R = Math.min(w, h) / 2; for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + i * Math.PI * 2 / n; c.lineTo(w / 2 + Math.cos(a) * R, h / 2 + Math.sin(a) * R); } c.closePath(); break; }
+        case 'star': { const n = U.clamp(Math.round(s.points || 5), 3, 512), R = Math.min(w, h) / 2, r = R * .45; for (let i = 0; i < n * 2; i++) { const a = -Math.PI / 2 + i * Math.PI / n, rr = i % 2 ? r : R; c.lineTo(w / 2 + Math.cos(a) * rr, h / 2 + Math.sin(a) * rr); } c.closePath(); break; }
+        case 'polygon': { const n = U.clamp(Math.round(s.points || 6), 3, 512), R = Math.min(w, h) / 2; for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + i * Math.PI * 2 / n; c.lineTo(w / 2 + Math.cos(a) * R, h / 2 + Math.sin(a) * R); } c.closePath(); break; }
         case 'heart': { c.moveTo(w / 2, h * .95); c.bezierCurveTo(-w * .2, h * .45, w * .1, -h * .15, w / 2, h * .28); c.bezierCurveTo(w * .9, -h * .15, w * 1.2, h * .45, w / 2, h * .95); c.closePath(); break; }
         case 'line': c.moveTo(0, h / 2); c.lineTo(w, h / 2); c.lineWidth = Math.max(2, sw || 6); c.strokeStyle = s.fill; c.stroke(); return cv;
         case 'arrow': { const hw = Math.max(6, sw || 8), ah = Math.min(h / 2, w * .3); c.moveTo(0, h / 2 - hw / 2); c.lineTo(w - ah, h / 2 - hw / 2); c.lineTo(w - ah, 0); c.lineTo(w, h / 2); c.lineTo(w - ah, h); c.lineTo(w - ah, h / 2 + hw / 2); c.lineTo(0, h / 2 + hw / 2); c.closePath(); break; }
@@ -421,5 +441,5 @@ const Compositor = (() => {
     return { render };
   })();
 
-  return { renderFrame, drawClip, clipBounds, hitTest, clearCaches, registerLUT, lutNames, exportLUTs, restoreLUTs, TextRenderer, ShapeRenderer, StickerRenderer, resolveEffects, roundRectPath };
+  return { renderFrame, visibleSpans, drawClip, clipBounds, hitTest, clearCaches, registerLUT, lutNames, exportLUTs, restoreLUTs, TextRenderer, ShapeRenderer, StickerRenderer, resolveEffects, roundRectPath };
 })();

@@ -20,7 +20,7 @@ await check('add media creates linked A/V clips', `(async () => { const c = awai
 await check('video frame renders pixels', `(async () => { const c = allClips().find(x => x.kind === 'video'); const el = Media.clipVideo(c); await new Promise(r => { if (el.readyState >= 2) r(); else { el.addEventListener('loadeddata', r, { once: true }); setTimeout(r, 4000); } }); el.currentTime = 0.5; await new Promise(r => { el.addEventListener('seeked', r, { once: true }); setTimeout(r, 2000); }); const cv = document.createElement('canvas'); cv.width = 1920; cv.height = 1080; const ctx = cv.getContext('2d'); Compositor.renderFrame(ctx, 0.5); const d = ctx.getImageData(960, 540, 1, 1).data; return (d[0] + d[1] + d[2]) > 30 ? true : Array.from(d); })()`);
 await check('speed change keeps linked', `(() => { const c = allClips().find(x => x.kind === 'video'); const d0 = c.duration; Cmd.setSpeed(c, 2); const a = Cmd.linkedOf(c)[0]; return Math.abs(c.duration - d0 / 2) < 1e-6 && Math.abs(a.duration - c.duration) < 1e-6; })()`);
 await check('export with real video (mp4)', `(async () => { let got = null; const orig = U.download; U.download = (b, n) => { got = { size: b.size, name: n }; }; try { await Exporter.exportWebCodecs({ format: Exporter.FORMATS[0], width: 320, height: 180, fps: 10, bitrate: 500000, audio: true, audioBitrate: 96000, from: 0, to: 0.6, name: 'real' }); } finally { U.download = orig; } return got && got.size > 1000 ? true : got; })()`);
-await check('freeze frame', `(async () => { const c = allClips().find(x => x.kind === 'video'); Player.seek(0.3); const n = allClips().length; await Cmd.freezeFrame(c, 0.3); return allClips().length === n + 2 && allClips().some(x => x.kind === 'image'); })()`);
+await check('freeze frame', `(async () => { const c = allClips().find(x => x.kind === 'video'); Player.seek(0.3); const n = allClips().length; await Cmd.freezeFrame(c, 0.3); return allClips().length === n + 3 && allClips().some(x => x.kind === 'image'); })()`);
 await check('remove video clips', `(() => { Cmd.deleteClips(allClips().filter(x => x.mediaId).map(x => x.id), false); return allClips().every(x => !x.mediaId); })()`);
 await check('add text clip', `(() => { const c = Cmd.addGenerated('text', { text: { content: 'Hello World' } }, { start: 0, duration: 4 }); return !!findClip(c.id) && state.duration === 4; })()`);
 await check('add shape + solid + adjustment', `(() => { Cmd.addGenerated('shape', {}, { start: 1, duration: 3 }); Cmd.addGenerated('solid', {}, { start: 0, duration: 6 }); const a = Cmd.addGenerated('adjustment', {}, { start: 0, duration: 6, name: 'Adj' }); Cmd.addEffect([a.id], 'color'); Cmd.addEffect([a.id], 'vignette'); return allClips().length === 4; })()`);
@@ -58,6 +58,6 @@ for (const [n, r] of results) console.log(`${r.startsWith('PASS') ? '✔' : '✘
 console.log('\n=== CONSOLE ERRORS / EXCEPTIONS ===');
 if (!errors.length) console.log('(none)'); else errors.forEach(e => console.log(e));
 const warnLogs = logs.filter(l => l.startsWith('[warn]')); if (warnLogs.length) { console.log('\n=== WARNINGS ==='); warnLogs.slice(0, 20).forEach(l => console.log(l)); }
-done();
+await done();
 const failed = results.filter(r => !r[1].startsWith('PASS')).length;
 process.exit(failed || errors.length ? 1 : 0);

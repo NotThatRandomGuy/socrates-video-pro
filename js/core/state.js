@@ -116,7 +116,8 @@ const Model = {
     };
   },
   newEffect(type) {
-    const def = EFFECT_DEFS[type]; if (!def) return null;
+    if (!Object.hasOwn(EFFECT_DEFS, type)) return null;
+    const def = EFFECT_DEFS[type];
     const params = {}; for (const [k, p] of Object.entries(def.params)) params[k] = p.def;
     if (def.colorParams) Object.assign(params, def.colorParams);
     return { id: U.uid('fx'), type, enabled: true, params, lut: null };
@@ -163,33 +164,37 @@ const state = {
 ============================================================ */
 const History = (() => {
   const undo = [], redo = []; const MAX = 200; let pending = null;
-  const snap = () => ({ project: JSON.stringify(state.project, (key, value) => { if (typeof value === 'number' && !Number.isFinite(value)) throw Error('Project values must be finite'); return value; }), sel: [...state.selection] });
+  const snap = (mediaId) => ({
+    media: mediaId ? { id: mediaId, item: findMedia(mediaId), index: state.media.findIndex(m => m.id === mediaId) } : null,
+    project: JSON.stringify(state.project, (key, value) => { if (typeof value === 'number' && !Number.isFinite(value)) throw Error('Project values must be finite'); return value; }), sel: [...state.selection] });
   const restore = (s) => {
     state.project = JSON.parse(s.project); state.selection = new Set(s.sel.filter(id => findClip(id)));
-    Events.emit('project:changed'); Events.emit('selection:changed');
+    if (s.media) Media.restoreEntry(s.media);
+    recalcDuration(); Media.gcClipEls();
+    Events.emit('project:resized'); Events.emit('project:changed'); Events.emit('selection:changed');
   };
   return {
-    begin(label = '') { pending = { ...snap(), label }; },
+    begin(label = '', mediaId) { pending = { ...snap(mediaId), label }; },
     commit(label) {
       if (!pending) pending = { ...snap(), label };
-      const cur = snap();
-      if (cur.project === pending.project) { pending = null; return; }
+      const cur = snap(pending.media?.id);
+      if (cur.project === pending.project && cur.media?.item === pending.media?.item) { pending = null; return; }
       undo.push(pending); if (undo.length > MAX) undo.shift(); redo.length = 0; pending = null;
       state.dirty = true; Events.emit('history:changed');
     },
     push(label) { this.begin(label); }, // alias: call before mutation, then commit()
     cancel() { pending = null; },
     abort() { const previous = pending; pending = null; if (previous) restore(previous); },
-    undo() { if (!undo.length) return; redo.push(snap()); restore(undo.pop()); Events.emit('history:changed'); state.dirty = true; },
-    redo() { if (!redo.length) return; undo.push(snap()); restore(redo.pop()); Events.emit('history:changed'); state.dirty = true; },
+    undo() { if (!undo.length) return; const target = undo.pop(); redo.push(snap(target.media?.id)); restore(target); Events.emit('history:changed'); state.dirty = true; },
+    redo() { if (!redo.length) return; const target = redo.pop(); undo.push(snap(target.media?.id)); restore(target); Events.emit('history:changed'); state.dirty = true; },
     canUndo: () => undo.length > 0, canRedo: () => redo.length > 0,
     clear() { undo.length = 0; redo.length = 0; pending = null; Events.emit('history:changed'); },
   };
 })();
 
 /* mutate helper: wraps a mutation into a single undoable step and refreshes UI */
-function mutate(label, fn) {
-  History.begin(label);
+function mutate(label, fn, mediaId) {
+  History.begin(label, mediaId);
   try { const r = fn(); History.commit(label); Events.emit('project:changed'); return r; }
   catch (error) { History.abort(); throw error; }
 }

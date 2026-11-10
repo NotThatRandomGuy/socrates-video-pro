@@ -10,14 +10,19 @@ const Player = (() => {
   const fps = () => state.project.fps;
   let playbackRange = null;
 
-  function loopRange() { if (playbackRange) return playbackRange; const P = state.project; if (P.inPoint !== null && P.outPoint !== null && P.outPoint > P.inPoint) return [P.inPoint, Math.min(P.outPoint, state.duration)]; return [0, state.duration]; }
+  function markedRange() {
+    const {inPoint, outPoint} = state.project;
+    const end = Math.min(outPoint ?? 0, state.duration);
+    return inPoint !== null && inPoint < end ? [inPoint, end] : null;
+  }
+  function loopRange() { return playbackRange || markedRange() || [0, state.duration]; }
 
   function play(rate = 1, range = null) {
     if (state.duration <= 0) return;
     playbackRange = range;
     const [a, b] = loopRange();
-    if (rate > 0 && state.currentTime >= b - 1e-3) state.currentTime = a;
-    if (rate < 0 && state.currentTime <= a + 1e-3) state.currentTime = b;
+    if (rate > 0 && (state.currentTime < a || state.currentTime >= b)) state.currentTime = a;
+    if (rate < 0 && (state.currentTime <= a || state.currentTime > b)) state.currentTime = b;
     if (raf) cancelAnimationFrame(raf); raf = null;
     state.playing = true; state.playRate = rate;
     if (rate > 0) AudioEngine.play(state.currentTime, rate); else { AudioEngine.stop(); wallStart = performance.now(); wallProj = state.currentTime; }
@@ -28,7 +33,7 @@ const Player = (() => {
     state.currentTime = U.clamp(now(), ...loopRange()); state.playing = false; state.playRate = 1; AudioEngine.stop();
     playbackRange = null;
     for (const v of Media.allClipEls().values()) v.pause();
-    state.currentTime = U.snapToFrame(state.currentTime, fps());
+    state.currentTime = U.clamp(U.snapToFrame(state.currentTime, fps()), 0, state.duration);
     Events.emit('playback:changed'); Events.emit('time:changed'); requestRender();
   }
   function toggle() { state.playing ? pause() : play(1); }
@@ -41,7 +46,7 @@ const Player = (() => {
   function seek(t, { snap = true } = {}) {
     if (!Number.isFinite(t)) return;
     const was = state.playing; if (was) { AudioEngine.stop(); }
-    t = U.clamp(t, 0, Math.max(state.duration, 0)); if (snap) t = U.snapToFrame(t, fps());
+    t = U.clamp(t, 0, Math.max(state.duration, 0)); if (snap) t = U.clamp(U.snapToFrame(t, fps()), 0, state.duration);
     state.currentTime = t; if (was) { if (state.playRate > 0) AudioEngine.play(t, state.playRate); wallStart = performance.now(); wallProj = t; }
     Events.emit('time:changed'); requestRender();
   }
@@ -51,17 +56,12 @@ const Player = (() => {
   function requestRender() { needRender = true; if (!raf) raf = requestAnimationFrame(tick); }
 
   function syncVideo(t) {
-    const soloed = videoTracks().some(tr => tr.solo); const activeIds = new Set();
-    for (const tr of videoTracks()) {
-      const vis = !tr.hidden && !(soloed && !tr.solo);
-      for (const c of tr.clips) {
-        if (c.kind !== 'video') continue;
-        // window is extended past the clip end because transitions can show the outgoing clip beyond it
-        const active = vis && c.enabled && t >= c.start - .5 && t < clipEnd(c) + 1.2;
-        if (!active) { const el = Media.allClipEls().get(c.id); if (el && !el.paused) el.pause(); continue; }
+    const activeIds = new Set();
+    for (const {clip: c, end} of Compositor.visibleSpans()) {
+        if (c.kind !== 'video' || t < c.start - .5 || t >= end) continue;
         const el = Media.clipVideo(c); if (!el) continue; activeIds.add(c.id);
         if (!el._hooked) { el._hooked = true; el.addEventListener('seeked', requestRender); el.addEventListener('loadeddata', requestRender); }
-        const inRange = t >= c.start && t < clipEnd(c) + 1.2;
+        const inRange = t >= c.start;
         const want = Math.max(0, c.offset + (t - c.start) * c.speed);
         const pastSource = el.duration && want >= el.duration - .05;
         const canPlay = state.playing && state.playRate > 0 && state.playRate * c.speed <= 8 && inRange && !pastSource;
@@ -74,8 +74,8 @@ const Player = (() => {
           const target = pastSource ? Math.max(0, el.duration - .05) : want;
           if (Math.abs(el.currentTime - target) > .5 / fps() && !el.seeking) el.currentTime = target;
         }
-      }
     }
+    for (const [id, el] of Media.allClipEls()) if (!activeIds.has(id) && !el.paused) el.pause();
   }
 
   function tick() {
@@ -101,7 +101,7 @@ const Player = (() => {
   // keep frames fresh while paused (video elements become ready, text edits, etc.)
   Events.on('project:changed', () => { recalcDuration(); requestRender(); if (state.playing) AudioEngine.reschedule(); });
   Events.on('selection:changed', () => requestRender());
-  return { play, pause, toggle, shuttle, seek, step, goStart, goEnd, requestRender, render, now, loopRange, syncVideo };
+  return { markedRange, play, pause, toggle, shuttle, seek, step, goStart, goEnd, requestRender, render, now, loopRange, syncVideo };
 })();
 
 /* ============================================================
@@ -114,11 +114,22 @@ const Preview = (() => {
     area = document.getElementById('previewArea'); canvas = document.getElementById('previewCanvas'); overlay = document.getElementById('previewOverlay'); octx = overlay.getContext('2d');
     new ResizeObserver(layout).observe(area);
     overlay.addEventListener('mousedown', onDown); overlay.addEventListener('mousemove', onMove); overlay.addEventListener('dblclick', onDbl);
-    overlay.addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1); } }, { passive: false });
+    overlay.addEventListener('wheel', (e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1); } }, { passive: false });
     overlay.addEventListener('contextmenu', (e) => { e.preventDefault(); const c = hitAt(e); if (c) { Cmd.select(c.id); UI.clipContextMenu(e.clientX, e.clientY, c); } });
     // drop media onto preview -> add at playhead on a new top track
     overlay.addEventListener('dragover', e => e.preventDefault());
-    overlay.addEventListener('drop', async (e) => { e.preventDefault(); const mid = e.dataTransfer.getData('mediaId'); if (mid) { const vt = videoTracks(); const tr = Cmd.ensureTrack('video', vt.length); await Cmd.addMedia(mid, { trackId: tr.id, start: state.currentTime }); } const files = Array.from(e.dataTransfer.files || []); if (files.length) { const added = await Media.importFiles(files); for (const m of added) await Cmd.addMedia(m.id, { start: state.currentTime }); } });
+    overlay.addEventListener('drop', async e => {
+      e.preventDefault();
+      const project = state.project, id = e.dataTransfer.getData('mediaId');
+      let start = state.currentTime;
+      if (id) { await Cmd.addMedia(id, { newVideoTrack: true, start }); return; }
+      const added = await Media.importFiles(Array.from(e.dataTransfer.files || []));
+      for (const m of added) {
+        if (state.project !== project) break;
+        const clip = await Cmd.addMedia(m.id, { start });
+        if (clip) start = clipEnd(clip);
+      }
+    });
     layout();
   }
   function layout() {
@@ -224,8 +235,17 @@ const Preview = (() => {
 
   async function snapshot(format = 'png') {
     const P = state.project; const cv = document.createElement('canvas'); cv.width = P.width; cv.height = P.height; const ctx = cv.getContext('2d');
-    Player.syncVideo(state.currentTime); await U.sleep(80); Compositor.renderFrame(ctx, state.currentTime);
-    cv.toBlob(b => U.download(b, `${P.name}_${U.toTimecode(state.currentTime, P.fps).replace(/:/g, '-')}.${format === 'jpeg' ? 'jpg' : 'png'}`), format === 'jpeg' ? 'image/jpeg' : 'image/png', .92);
+    const playing = state.playing, rate = state.playRate;
+    if (playing) Player.pause();
+    const time = state.currentTime;
+    try {
+      await Exporter.seekAll(time);
+      Compositor.renderFrame(ctx, time);
+      const blob = await new Promise(resolve => cv.toBlob(resolve, format === 'jpeg' ? 'image/jpeg' : 'image/png', .92));
+      if (!blob) throw Error('Image encoder unavailable');
+      U.download(blob, `${P.name}_${U.toTimecode(time, P.fps).replace(/:/g, '-')}.${format === 'jpeg' ? 'jpg' : 'png'}`);
+    } catch (error) { UI.toast('Frame export failed: ' + error.message); }
+    finally { if (playing && state.project === P && state.currentTime === time) Player.play(rate); }
   }
   function fullscreen() { const el = document.getElementById('previewArea'); if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen?.(); }
   return { init, layout, drawOverlay, setZoom, zoomBy, snapshot, fullscreen };

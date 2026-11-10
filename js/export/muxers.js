@@ -50,7 +50,7 @@ class WebMMuxer {
     const M = WebMMuxer;
     const header = M.master(0x1A45DFA3, M.uint(0x4286, 1), M.uint(0x42F7, 1), M.uint(0x42F2, 4), M.uint(0x42F3, 8), M.string(0x4282, 'webm'), M.uint(0x4287, 4), M.uint(0x4285, 2));
     this.blocks.sort((a, b) => a.ts - b.ts || a.track - b.track);
-    const dur = Math.max(this.duration * 1000, this.blocks.length ? this.blocks[this.blocks.length - 1].ts + 1000 / this.fps : 0);
+    const dur = this.duration > 0 ? this.duration * 1000 : this.blocks.reduce((end, b) => Math.max(end, b.ts + (b.track === 1 ? 1000 / this.fps : 20)), 0);
     const info = M.master(0x1549A966, M.uint(0x2AD7B1, 1000000), M.string(0x4D80, 'VideoEditorPro'), M.string(0x5741, 'VideoEditorPro'), M.float(0x4489, dur));
     const vtrack = M.master(0xAE, M.uint(0xD7, 1), M.uint(0x73C5, 1), M.uint(0x83, 1), M.string(0x86, this.videoCodec), M.uint(0x23E383, Math.round(1e9 / this.fps)), this.videoDesc ? M.el(0x63A2, this.videoDesc) : null, M.master(0xE0, M.uint(0xB0, this.width), M.uint(0xBA, this.height)));
     const atrack = this.audio ? M.master(0xAE, M.uint(0xD7, 2), M.uint(0x73C5, 2), M.uint(0x83, 2), M.string(0x86, this.audio.codec), M.uint(0x56AA, 6500000), M.uint(0x56BB, 80000000), M.el(0x63A2, this.audioDesc && this.audioDesc.byteLength > 8 ? this.audioDesc : this.opusHead()), M.master(0xE1, M.float(0xB5, this.audio.sampleRate), M.uint(0x9F, this.audio.channels))) : null;
@@ -60,16 +60,16 @@ class WebMMuxer {
     const flush = () => { if (!cur) return; const w = new ByteWriter(); w.push(M.uint(0xE7, cur.tc)); cur.blocks.forEach(b => w.push(b)); clusters.push({ bytes: M.el(0x1F43B675, w.bytes()), tc: cur.tc }); cur = null; };
     for (const b of this.blocks) {
       const tsMs = Math.round(b.ts);
-      if (!cur || (b.track === 1 && b.key && tsMs - cur.tc >= 4000) || tsMs - cur.tc > 32000) { flush(); cur = { tc: tsMs, blocks: [] }; if (b.track === 1) cues.push({ time: tsMs, cluster: clusters.length }); }
+      if (!cur || (b.track === 1 && b.key && tsMs - cur.tc >= 4000) || tsMs - cur.tc > 32000) { flush(); cur = { tc: Math.max(0, tsMs), blocks: [] }; if (b.track === 1) cues.push({ time: tsMs, cluster: clusters.length }); }
       const w = new ByteWriter(); w.u8(0x80 | b.track); w.i16(tsMs - cur.tc); w.u8(b.key ? 0x80 : 0); w.push(b.data); cur.blocks.push(M.el(0xA3, w.bytes()));
     }
     flush();
     // compute cluster positions relative to segment data start (after seekhead-less: info + tracks precede clusters)
     const segHeadLen = info.byteLength + tracks.byteLength; const positions = []; let acc = segHeadLen; for (const c of clusters) { positions.push(acc); acc += c.bytes.byteLength; }
     const cuesEl = M.master(0x1C53BB6B, ...cues.map(cu => M.master(0xBB, M.uint(0xB3, cu.time), M.master(0xB7, M.uint(0xF7, 1), M.uint(0xF1, positions[cu.cluster])))));
-    const seg = new ByteWriter(); seg.push(info); seg.push(tracks); clusters.forEach(c => seg.push(c.bytes)); seg.push(cuesEl);
-    const segBytes = seg.bytes(); const out = new ByteWriter(); out.push(header); out.push(M.id(0x18538067)); out.push(M.vint(segBytes.byteLength)); out.push(segBytes);
-    return new Blob([out.bytes()], { type: 'video/webm' });
+    const segmentSize = acc + cuesEl.byteLength;
+    return new Blob([header, M.id(0x18538067), M.vint(segmentSize), info, tracks,
+      ...clusters.map(cluster => cluster.bytes), cuesEl], { type: 'video/webm' });
   }
 }
 
@@ -106,10 +106,15 @@ class MP4Muxer {
     const mvhd = F('mvhd', 0, 0, W().u32(now).u32(now).u32(mvTimescale).u32(movieDur).u32(0x00010000).u16(0x0100).u16(0).u32(0).u32(0).push(matrix()).push(new Uint8Array(24)).u32(this.audio ? 3 : 2).bytes());
     function matrix() { return W().u32(0x00010000).u32(0).u32(0).u32(0).u32(0x00010000).u32(0).u32(0).u32(0).u32(0x40000000).bytes(); }
     const tkhd = (id, dur, w, h, isAudio) => F('tkhd', 0, 3, W().u32(now).u32(now).u32(id).u32(0).u32(dur).u32(0).u32(0).u16(0).u16(0).u16(isAudio ? 0x0100 : 0).u16(0).push(matrix()).u32(w << 16).u32(h << 16).bytes());
-    const mdhd = (timescale, dur) => F('mdhd', 0, 0, W().u32(now).u32(now).u32(timescale).u32(dur).u16(0x55c4).u16(0).bytes());
+    const mdhd = (timescale, dur) => {
+      const wide = dur > 0xffffffff;
+      const fields = wide ? W().u64(now).u64(now).u32(timescale).u64(dur) : W().u32(now).u32(now).u32(timescale).u32(dur);
+      return F('mdhd', wide ? 1 : 0, 0, fields.u16(0x55c4).u16(0).bytes());
+    };
     const hdlr = (type, name) => F('hdlr', 0, 0, W().u32(0).str(type).u32(0).u32(0).u32(0).str(name).u8(0).bytes());
     const dinf = B('dinf', F('dref', 0, 0, W().u32(1).push(F('url ', 0, 1)).bytes()));
-    const stts = (samples, getDur) => { const runs = []; for (const s of samples) { const d = getDur(s); if (runs.length && runs[runs.length - 1].d === d) runs[runs.length - 1].n++; else runs.push({ d, n: 1 }); } const w = W().u32(runs.length); runs.forEach(r => w.u32(r.n).u32(r.d)); return F('stts', 0, 0, w.bytes()); };
+    const timingTable = (type, version, samples, getDur) => { const runs = []; for (const s of samples) { const d = getDur(s); if (runs.length && runs[runs.length - 1].d === d) runs[runs.length - 1].n++; else runs.push({ d, n: 1 }); } const w = W().u32(runs.length); runs.forEach(r => w.u32(r.n).u32(r.d)); return F(type, version, 0, w.bytes()); };
+    const stts = (samples, getDur) => timingTable('stts', 0, samples, getDur);
     const stsc = F('stsc', 0, 0, W().u32(1).u32(1).u32(1).u32(1).bytes());
     const stsz = (samples) => { const w = W().u32(0).u32(samples.length); samples.forEach(s => w.u32(s.size)); return F('stsz', 0, 0, w.bytes()); };
     const stco = (samples) => { const big = samples.some(s => mdatOffset + s.offset > 0xFFFFFFFF); const w = W().u32(samples.length); samples.forEach(s => big ? w.u64(mdatOffset + s.offset) : w.u32(mdatOffset + s.offset)); return F(big ? 'co64' : 'stco', 0, 0, w.bytes()); };
@@ -118,7 +123,14 @@ class MP4Muxer {
     const sampleEntryV = B(this.vCodecName, W().push(new Uint8Array(6)).u16(1).u16(0).u16(0).u32(0).u32(0).u32(0).u16(this.width).u16(this.height).u32(0x00480000).u32(0x00480000).u32(0).u16(1).push(new Uint8Array(32)).u16(0x18).i16(-1).bytes(), avcC);
     const stsdV = F('stsd', 0, 0, W().u32(1).push(sampleEntryV).bytes());
     const keys = this.vSamples.map((s, i) => s.key ? i + 1 : 0).filter(Boolean); const stss = (() => { const w = W().u32(keys.length); keys.forEach(k => w.u32(k)); return F('stss', 0, 0, w.bytes()); })();
-    const stblV = B('stbl', stsdV, stts(this.vSamples, s => s.dur), stss, stsc, stsz(this.vSamples), stco(this.vSamples));
+    let decodeTime = 0;
+    const offsets = this.vSamples.map(sample => {
+      const offset = sample.ts - decodeTime;
+      decodeTime += sample.dur;
+      return offset;
+    });
+    const ctts = offsets.some(offset => offset !== 0) ? timingTable('ctts', offsets.some(n => n < 0) ? 1 : 0, offsets, n => n) : null;
+    const stblV = B('stbl', stsdV, stts(this.vSamples, s => s.dur), ctts, stss, stsc, stsz(this.vSamples), stco(this.vSamples));
     const minfV = B('minf', F('vmhd', 0, 1, W().u16(0).u16(0).u16(0).u16(0).bytes()), dinf, stblV);
     const trakV = B('trak', tkhd(1, Math.round(vDurUs / 1e6 * mvTimescale), this.width, this.height, false), B('mdia', mdhd(vTimescale, vDurUs), hdlr('vide', 'VideoHandler'), minfV));
     // audio

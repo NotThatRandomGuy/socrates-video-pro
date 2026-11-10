@@ -43,12 +43,13 @@ const Exporter = (() => {
     const qSel = U.el('select', {}, QUALITY.map(([v, l]) => U.el('option', { value: v, selected: v === 'high' }, l)));
     const custom = U.el('input', { type: 'number', value: 12, min: .5, max: 200, step: .5, class: 'num', style: { display: 'none' } }); qSel.onchange = () => custom.style.display = qSel.value === 'custom' ? '' : 'none';
     const audioChk = U.el('input', { type: 'checkbox', checked: true }); const aBr = U.el('select', {}, [96, 128, 192, 256, 320].map(b => U.el('option', { value: b, selected: b === 192 }, b + ' kbps')));
-    const rangeSel = U.el('select', {}, [['all', 'Entire timeline'], ['inout', 'In → Out range']].map(([v, l]) => U.el('option', { value: v, disabled: v === 'inout' && (P.inPoint === null || P.outPoint === null) }, l)));
+    const marked = Player.markedRange();
+    const rangeSel = U.el('select', {}, [['all', 'Entire timeline'], ['inout', 'In → Out range']].map(([v, l]) => U.el('option', { value: v, disabled: v === 'inout' && !marked }, l)));
     const name = U.el('input', { type: 'text', value: P.name.replace(/[^\w\- ]+/g, '_'), style: { width: '100%' } });
     const engine = U.el('select', {}, [['webcodecs', 'Frame-accurate (WebCodecs)' + (hasWebCodecs() ? '' : ' — unavailable')], ['realtime', 'Real-time capture (MediaRecorder)']].map(([v, l]) => U.el('option', { value: v, disabled: v === 'webcodecs' && !hasWebCodecs() }, l)));
     if (!hasWebCodecs()) engine.value = 'realtime';
     const est = U.el('div', { class: 'meta' });
-    const updEst = () => { const [w, h] = outSize(resSel.value); const dur = rangeSel.value === 'inout' ? P.outPoint - P.inPoint : state.duration; const mbps = qSel.value === 'custom' ? +custom.value : QUALITY.find(q => q[0] === qSel.value)[2]; const br = scaledBitrate(mbps, w, h); est.textContent = `Output ${w}×${h} · ${U.toTimecode(dur, P.fps)} · ~${U.fmtBytes((br + (audioChk.checked ? +aBr.value * 1000 : 0)) / 8 * dur)} estimated`; };
+    const updEst = () => { const [w, h] = outSize(resSel.value); const dur = rangeSel.value === 'inout' ? marked[1] - marked[0] : state.duration; const mbps = qSel.value === 'custom' ? +custom.value : QUALITY.find(q => q[0] === qSel.value)[2]; const br = scaledBitrate(mbps, w, h); est.textContent = `Output ${w}×${h} · ${U.toTimecode(dur, P.fps)} · ~${U.fmtBytes((br + (audioChk.checked ? +aBr.value * 1000 : 0)) / 8 * dur)} estimated`; };
     [resSel, qSel, custom, audioChk, aBr, rangeSel].forEach(e => e.addEventListener('change', updEst)); updEst();
     const f = (l, e) => U.el('div', { class: 'field' }, U.el('label', {}, l), e);
     const body = U.el('div', {}, f('File name', name), U.el('div', { class: 'row2' }, f('Format', fmtSel), f('Resolution', resSel)), U.el('div', { class: 'row2' }, f('Frame rate', fpsSel), f('Quality', U.el('div', { class: 'row' }, qSel, custom))), U.el('div', { class: 'row2' }, f('Range', rangeSel), f('Engine', engine)), U.el('div', { class: 'field row' }, U.el('label', {}, 'Include audio'), audioChk, aBr), est);
@@ -56,7 +57,7 @@ const Exporter = (() => {
     if (!ok) return;
     const [w, h] = outSize(resSel.value); const fps = fpsSel.value === 'project' ? P.fps : +fpsSel.value;
     const mbps = qSel.value === 'custom' ? +custom.value : QUALITY.find(q => q[0] === qSel.value)[2];
-    const opts = { format: FORMATS.find(x => x.id === fmtSel.value), width: w, height: h, fps, bitrate: scaledBitrate(mbps, w, h), audio: audioChk.checked, audioBitrate: +aBr.value * 1000, from: rangeSel.value === 'inout' ? P.inPoint : 0, to: rangeSel.value === 'inout' ? P.outPoint : state.duration, name: name.value || 'export' };
+    const opts = { format: FORMATS.find(x => x.id === fmtSel.value), width: w, height: h, fps, bitrate: scaledBitrate(mbps, w, h), audio: audioChk.checked, audioBitrate: +aBr.value * 1000, from: rangeSel.value === 'inout' ? marked[0] : 0, to: rangeSel.value === 'inout' ? marked[1] : state.duration, name: name.value || 'export' };
     if (engine.value === 'realtime') return exportRealtime(opts); return exportWebCodecs(opts);
   }
   function outSize(v) { const P = state.project; if (v === 'project') return [even(P.width), even(P.height)]; const [w, h] = v.split('x').map(Number); return [even(w), even(h)]; }
@@ -88,7 +89,14 @@ const Exporter = (() => {
     try { validate(o); } catch (e) { UI.toast(e.message); return false; }
     busy = true; state.exporting = 'webcodecs'; cancelFlag = false; Player.pause(); AudioEngine.stopPreview();
     const time = state.currentTime, loop = state.loop; state.loop = false;
-    try { return await task({ ...o }); }
+    try {
+      for (const {clip, end} of Compositor.visibleSpans()) {
+        if (!['image','video'].includes(clip.kind) || clip.start >= o.to || end <= o.from) continue;
+        const source = findMedia(clip.mediaId);
+        if (!source?.url || source.error) throw Error('Relink the source for ' + clip.name);
+      }
+      return await task({ ...o });
+    }
     catch (e) { UI.toast(e.message === 'cancelled' ? 'Export cancelled' : 'Export failed: ' + e.message, 6000); return false; }
     finally { Player.pause(); state.loop = loop; state.exporting = false; busy = false; Player.seek(time); }
   }
@@ -99,8 +107,8 @@ const Exporter = (() => {
     checkCancel(error());
   }
   async function seekAll(t) {
-    const solo = videoTracks().some(tr => tr.solo);
-    await Promise.all(videoTracks().filter(tr => !tr.hidden && (!solo || tr.solo)).flatMap(tr => tr.clips).filter(c => c.kind === 'video' && c.enabled && t >= c.start - .01 && t < clipEnd(c) + 1.5).map(async c => {
+    const needed = Compositor.visibleSpans().filter(({clip,end}) => clip.kind === 'video' && t >= clip.start && t < end);
+    await Promise.all(needed.map(async ({clip: c}) => {
       const el = Media.clipVideo(c); if (!el) throw Error('Missing media: ' + c.name);
       if (el.readyState < 1) await new Promise((resolve, reject) => {
         const finish = error => { clearTimeout(timer); el.removeEventListener('loadedmetadata', ready); el.removeEventListener('error', failed); error ? reject(error) : resolve(); };
@@ -138,7 +146,9 @@ const Exporter = (() => {
       const {cv,draw} = outputCanvas(o);
       for (let i=0;i<total;i++) {
         checkCancel(error); const t=o.from+i/o.fps; await seekAll(t); draw(t);
-        const frame = new VideoFrame(cv,{timestamp:Math.round(i*1e6/o.fps),duration:Math.round(1e6/o.fps)});
+        const timestamp = Math.round(i * 1e6 / o.fps);
+        const endTime = Math.round(Math.min(dur, (i + 1) / o.fps) * 1e6);
+        const frame = new VideoFrame(cv, { timestamp, duration: Math.max(1, endTime - timestamp) });
         try { venc.encode(frame,{keyFrame:i%Math.max(1,Math.round(o.fps*2))===0}); } finally { frame.close(); }
         await waitQueue(venc,4,()=>error);
         if(i%5===0){ui.set(i);if(i%15===0)ui.thumb(cv);await U.nextFrame();}
@@ -179,13 +189,16 @@ const Exporter = (() => {
   /* ---------------- WAV ---------------- */
   async function exportWav() {
     if (state.duration <= 0) return UI.toast('Nothing to export'); const P = state.project;
-    const from = P.inPoint !== null && P.outPoint !== null ? P.inPoint : 0, to = P.inPoint !== null && P.outPoint !== null ? P.outPoint : state.duration;
-    UI.toast('Rendering audio…'); const buf = await AudioEngine.renderOffline(from, to, 48000);
+    const [from, to] = Player.markedRange() || [0, state.duration];
+    UI.toast('Rendering audio…');
+    let buf;
+    try { buf = await AudioEngine.renderOffline(from, to, 48000); }
+    catch (error) { UI.toast('WAV export failed: ' + error.message, 6000); return false; }
     const n = buf.length, ch = 2; const out = new DataView(new ArrayBuffer(44 + n * ch * 2)); const w = (o, s) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); };
     w(0, 'RIFF'); out.setUint32(4, 36 + n * ch * 2, true); w(8, 'WAVE'); w(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, ch, true); out.setUint32(24, 48000, true); out.setUint32(28, 48000 * ch * 2, true); out.setUint16(32, ch * 2, true); out.setUint16(34, 16, true); w(36, 'data'); out.setUint32(40, n * ch * 2, true);
     const L = buf.getChannelData(0), R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L; let o = 44; for (let i = 0; i < n; i++) { out.setInt16(o, U.clamp(L[i], -1, 1) * 32767, true); out.setInt16(o + 2, U.clamp(R[i], -1, 1) * 32767, true); o += 4; }
     U.download(new Blob([out], { type: 'audio/wav' }), `${P.name}.wav`); UI.toast('Audio exported');
   }
 
-  return { dialog, exportWebCodecs, exportRealtime, exportWav, FORMATS };
+  return { dialog, seekAll, exportWebCodecs, exportRealtime, exportWav, FORMATS };
 })();

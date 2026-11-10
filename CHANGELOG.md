@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.2.0 — 2026-11-09
+
+### Major Updates
+
+- Added native Mac downloads for Apple silicon and Intel. Both include the full editor, local project recovery, canvas cropping, snapping, recording, and video, audio, and image export.
+- Added Mac application and editing menus, Command shortcuts, and Dock reopening. The app asks macOS for camera, microphone, and screen access when you use recording.
+
+### Minor Updates
+
+- Each Mac download is mounted on a matching Mac runner. Release checks verify its disk image, app signature, processor type, sandboxed startup, and exported video. The signed download list now covers both Mac images.
+- Updated the desktop runtime and patched a security advisory in a file-matching tool used to build the downloads. The local web server serves only editor files.
+- Release verification now checks the publisher's certificate, the complete list of downloads, and GitHub's checksums. Each version stages its files in a separate folder.
+- Expanded regression coverage for editing, recovery, playback, export timing, and invalid projects. Browser checks wait for the editor to finish starting and remove their temporary profiles when finished.
+
+### Bug Fixes
+
+- Inserting in the middle of linked clips now splits video and audio together and preserves their source positions and animation. Moving, duplicating, or pasting a group in ripple mode makes room once. Left ripple trims move later clips in the correct direction.
+- Freeze frames make room for the still image and its matching audio gap. A selection rectangle can shrink again during an additive selection. Dropping several files on the preview places them in sequence, and undoing a preview drop removes its newly created track.
+- Removing source media can be undone and redone together with its timeline clips. Locked tracks protect their clips and sources from removal. Pasting onto a locked track no longer moves other clips.
+- Pasting attributes keeps copied animation attached to its effects. Undo works for effect colors, project backgrounds, and applied color lookup tables. Two different lookup tables with the same filename can coexist.
+- The editor restores projects containing only settings, crop changes, or markers. Media names and tags survive cache recovery. Invalid media metadata, duplicate effect identifiers, malformed dragged presets, and excessive shape sizes are caught before they damage an edit.
+- The fractional frame rates offered in the Inspector now save, reopen, and display whole frame numbers. Playback and export clamp marked ranges after the timeline is shortened.
+- Preview, snapshots, and video export use the full duration of a transition. Thumbnail and freeze-frame requests no longer compete to seek the same video. Missing visible sources are reported during export.
+- Short audio exports now contain the requested number of samples. Audible missing sources produce an actionable message. Muted tracks can export silence. Switching audio previews or losing microphone access during setup releases the affected resources.
+- MP4 preserves presentation order for reordered frames and duration for long tracks. WebM handles audio starting before the first video frame and uses less memory when assembling the download. Partial final frames respect the selected end time.
+- Graphics effects recover after a lost graphics context. Shape complexity and effect values are bounded, and wrapped text preserves word animation timing.
+
 ## 1.1.0 — 2026-11-01
 
 ### Major Updates

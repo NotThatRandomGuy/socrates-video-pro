@@ -30,17 +30,17 @@ const Cmd = (() => {
   }
   function defaultTrackName(t) { const same = P().tracks.filter(x => x.kind === t.kind); return (t.kind === 'video' ? 'V' : 'A') + (same.indexOf(t) + 1); }
   function ensureTrack(kind, index = 0) { const list = P().tracks.filter(t => t.kind === kind); while (list.length <= index) { const t = Model.newTrack(kind); const arr = P().tracks; if (kind === 'video') { const lastV = arr.map(x => x.kind).lastIndexOf('video'); arr.splice(lastV + 1, 0, t); } else arr.push(t); t.name = defaultTrackName(t); list.push(t); } return list[index]; }
-  function removeTrack(id) { mutate('Remove track', () => { const t = findTrack(id); if (!t) return; t.clips.forEach(c => { state.selection.delete(c.id); Media.releaseClip(c.id); }); P().tracks = P().tracks.filter(x => x.id !== id); }); refresh(); }
-  function moveTrack(id, dir) { mutate('Move track', () => { const arr = P().tracks; const i = arr.findIndex(t => t.id === id); const t = arr[i]; const j = i + dir; if (j < 0 || j >= arr.length || arr[j].kind !== t.kind) return; arr[i] = arr[j]; arr[j] = t; }); }
+  function removeTrack(id) { mutate('Remove track', () => { const t = findTrack(id); if (!t || t.locked) return; t.clips.forEach(c => { state.selection.delete(c.id); Media.releaseClip(c.id); }); P().tracks = P().tracks.filter(x => x.id !== id); }); refresh(); }
+  function moveTrack(id, dir) { mutate('Move track', () => { const arr = P().tracks; const i = arr.findIndex(t => t.id === id); if (i < 0) return; const t = arr[i]; const j = i + dir; if (j < 0 || j >= arr.length || arr[j].kind !== t.kind) return; arr[i] = arr[j]; arr[j] = t; }); }
   function setTrackProp(id, prop, val) { mutate('Track ' + prop, () => { const t = findTrack(id); if (t) t[prop] = val; }); AudioEngine.updateMix(); }
-  function cleanEmptyTracks() { mutate('Remove empty tracks', () => { const keep = P().tracks.filter(t => t.clips.length); if (!keep.some(t => t.kind === 'video')) keep.unshift(Model.newTrack('video', 'V1')); if (!keep.some(t => t.kind === 'audio')) keep.push(Model.newTrack('audio', 'A1')); P().tracks = keep; }); }
+  function cleanEmptyTracks() { mutate('Remove empty tracks', () => { const keep = P().tracks.filter(t => t.locked || t.clips.length); if (!keep.some(t => t.kind === 'video')) keep.unshift(Model.newTrack('video', 'V1')); if (!keep.some(t => t.kind === 'audio')) keep.push(Model.newTrack('audio', 'A1')); P().tracks = keep; }); }
 
   /* ---------------- placement ---------------- */
   /* trims/splits clips on `track` overlapping [start, end) except `except` */
   function overwriteRange(track, start, end, except) {
     const out = [];
     for (const c of track.clips.slice()) {
-      if (c === except) continue; const ce = clipEnd(c);
+      if (c === except || (except instanceof Set && except.has(c))) continue; const ce = clipEnd(c);
       if (ce <= start + 1e-6 || c.start >= end - 1e-6) continue;
       if (c.start >= start && ce <= end) { track.clips.splice(track.clips.indexOf(c), 1); state.selection.delete(c.id); continue; } // fully covered
       if (c.start < start && ce > end) { // split around
@@ -52,15 +52,60 @@ const Cmd = (() => {
     return out;
   }
   function shiftAfter(t, dt, tracks = P().tracks) { tracks.filter(tr => !tr.locked).forEach(tr => tr.clips.forEach(c => { if (c.start >= t - 1e-6) c.start = Math.max(0, c.start + dt); })); P().markers.forEach(m => { if (m.time >= t - 1e-6) m.time += dt; }); }
+  function insertSpace(at, duration, excluded = new Set()) {
+    const rightLinks = new Map();
+    for (const track of P().tracks) {
+      if (track.locked) continue;
+      for (const c of track.clips.slice()) {
+        if (excluded.has(c) || clipEnd(c) <= at + 1e-6) continue;
+        if (c.start >= at - 1e-6) { c.start += duration; continue; }
+        const right = U.deepClone(c);
+        const cut = at - c.start;
+        right.id = U.uid('c');
+        right.start = at + duration;
+        right.duration -= cut;
+        right.offset += cut * c.speed;
+        right.transitionIn.type = 'none';
+        c.transitionOut.type = 'none';
+        if (c.linkId) {
+          if (!rightLinks.has(c.linkId)) rightLinks.set(c.linkId, U.uid('ln'));
+          right.linkId = rightLinks.get(c.linkId);
+        }
+        KF.shift(right, -cut);
+        c.duration = cut;
+        track.clips.push(right);
+      }
+      track.clips.sort((a,b) => a.start - b.start);
+    }
+    for (const marker of P().markers) if (marker.time >= at) marker.time += duration;
+  }
   /* place clip on track at start; mode 'overwrite' | 'insert' */
   function placeClip(clip, track, start, mode = 'overwrite') {
     if (!track || track.locked || !Number.isFinite(start)) return false;
     clip.start = Math.max(0, start);
-    if (mode === 'insert') shiftAfter(clip.start, clip.duration, P().tracks);
+    if (mode === 'insert') insertSpace(clip.start, clip.duration, new Set([clip]));
     else overwriteRange(track, clip.start, clipEnd(clip), clip);
     if (!track.clips.includes(clip)) track.clips.push(clip);
     track.clips.sort((a, b) => a.start - b.start);
   }
+  function removeMedia(id) {
+    if (!findMedia(id)) return;
+    const used = mediaUsedBy(id);
+    if (used.some(c => !editable(c))) return UI.toast('Unlock tracks using this media before removing it');
+    Player.pause();
+    mutate('Remove media', () => {
+      for (const clip of used) {
+        const track = findTrackOfClip(clip.id);
+        track.clips.splice(track.clips.indexOf(clip), 1);
+        state.selection.delete(clip.id);
+        Media.releaseClip(clip.id);
+      }
+      Media.remove(id);
+      recalcDuration();
+    }, id);
+    Events.emit('selection:changed');
+  }
+
   function firstGapFor(track, dur, from = 0) { // first start >= from with no overlap
     const cl = track.clips.slice().sort((a, b) => a.start - b.start); let s = from;
     for (const c of cl) { if (clipEnd(c) <= s) continue; if (c.start >= s + dur) break; s = clipEnd(c); }
@@ -69,13 +114,15 @@ const Cmd = (() => {
   function endOf(track) { return track.clips.reduce((m, c) => Math.max(m, clipEnd(c)), 0); }
 
   /* ---------------- add media ---------------- */
-  async function addMedia(mediaId, { trackId = null, start = null, mode = null, select: sel = true } = {}) {
-    const m = findMedia(mediaId); if (!m) return null;
+  async function addMedia(mediaId, { trackId = null, newVideoTrack = false, start = null, mode = null, select: sel = true } = {}) {
+    const project = P(), m = findMedia(mediaId);
+    if (!m || m.missing || (start !== null && !Number.isFinite(start))) return null;
     if (m.audioReady) await m.audioReady;
+    if (project !== P() || findMedia(mediaId) !== m) return null;
     return mutate('Add media', () => {
       const kind = m.type === 'video' ? 'video' : m.type === 'image' ? 'image' : 'audio';
       const dur = m.duration > 0 && isFinite(m.duration) ? m.duration : 5;
-      let track = trackId ? findTrack(trackId) : null;
+      let track = newVideoTrack && kind !== 'audio' ? ensureTrack('video', videoTracks().length) : findTrack(trackId);
       if (!track || (track.kind === 'audio' && kind !== 'audio') || (track.kind === 'video' && kind === 'audio')) track = ensureTrack(kind === 'audio' ? 'audio' : 'video', 0);
       if (track.locked) { UI.toast('Unlock the track before adding media'); return null; }
       const st = start === null ? endOf(track) : start;
@@ -174,13 +221,12 @@ const Cmd = (() => {
   function paste(t = state.currentTime) {
     if (!state.clipboard) return;
     mutate('Paste', () => {
-      const linkMap = {}; const ids = [];
-      const entries = state.clipboard.filter(it => !findTrack(it.trackId)?.locked);
-      if (state.ripple && entries.length) shiftAfter(t, Math.max(...entries.map(it => it.rel + it.clip.duration)));
+      const linkMap = new Map(), ids = [];
+      const entries = state.clipboard.map(it => ({ ...it, track: findTrack(it.trackId) || ensureTrack(it.kind, it.trackIndex) })).filter(it => !it.track.locked);
+      if (state.ripple && entries.length) insertSpace(t, Math.max(...entries.map(it => it.rel + it.clip.duration)));
       for (const it of entries) {
-        const c = U.deepClone(it.clip); c.id = U.uid('c'); if (c.linkId) { linkMap[c.linkId] = linkMap[c.linkId] || U.uid('ln'); c.linkId = linkMap[c.linkId]; }
-        const track = findTrack(it.trackId) || ensureTrack(it.kind, it.trackIndex);
-        placeClip(c, track, t + it.rel, 'overwrite'); ids.push(c.id);
+        const c = U.deepClone(it.clip); c.id = U.uid('c'); if (c.linkId) { if (!linkMap.has(c.linkId)) linkMap.set(c.linkId, U.uid('ln')); c.linkId = linkMap.get(c.linkId); }
+        placeClip(c, it.track, t + it.rel, 'overwrite'); ids.push(c.id);
       }
       state.selection = new Set(ids);
     }); refresh(); Events.emit('selection:changed');
@@ -188,7 +234,26 @@ const Cmd = (() => {
   function duplicate() { const cs = selectedClips(); if (!cs.length) return; const end = Math.max(...cs.map(clipEnd)); const saved = state.clipboard; copy(); paste(end); state.clipboard = saved; }
   function pasteAttributes() {
     if (!state.clipboard || !state.clipboard.length) return; const src = state.clipboard[0].clip;
-    mutate('Paste attributes', () => selectedClips().filter(editable).forEach(c => { c.transform = U.deepClone(src.transform); c.effects = U.deepClone(src.effects).map(f => ({ ...f, id: U.uid('fx') })); c.crop = U.deepClone(src.crop); c.blend = src.blend; c.fit = src.fit; c.cornerRadius = src.cornerRadius; if (c.text && src.text) { const content = c.text.content; c.text = U.deepClone(src.text); c.text.content = content; } if (c.audio && src.audio) c.audio = U.deepClone(src.audio); }));
+    mutate('Paste attributes', () => selectedClips().filter(editable).forEach(c => {
+      const fields = ['transform', 'crop', 'blend', 'fit', 'cornerRadius'];
+      if (c.audio && src.audio) fields.push('audio');
+      if (c.text && src.text) fields.push('text');
+      const content = c.text?.content;
+      for (const key of fields) c[key] = U.deepClone(src[key]);
+      if (c.text) c.text.content = content;
+      const ids = new Map();
+      c.effects = U.deepClone(src.effects).map(fx => {
+        const id = U.uid('fx'); ids.set(fx.id, id); return { ...fx, id };
+      });
+      for (const path of Object.keys(c.keyframes)) {
+        if (path.startsWith('fx.') || fields.includes(path.split('.')[0])) delete c.keyframes[path];
+      }
+      for (const [path, keys] of Object.entries(src.keyframes)) {
+        const [field, id, param] = path.split('.');
+        if (field === 'fx' && ids.has(id)) c.keyframes['fx.' + ids.get(id) + '.' + param] = U.deepClone(keys);
+        else if (fields.includes(field)) c.keyframes[path] = U.deepClone(keys);
+      }
+    }));
   }
 
   /* ---------------- clip properties ---------------- */
@@ -255,12 +320,15 @@ const Cmd = (() => {
   async function freezeFrame(clip = primaryClip(), t = state.currentTime) {
     if (!editable(clip)) return;
     if (!clip || clip.kind !== 'video') return UI.toast('Select a video clip');
-    const m = findMedia(clip.mediaId); const lt = clip.offset + (t - clip.start) * clip.speed;
+    if (t < clip.start || t >= clipEnd(clip)) return UI.toast('Place the playhead inside the video clip');
+    const m = findMedia(clip.mediaId); if (!m?.url) return UI.toast('Relink the video before freezing a frame');
+    const lt = clip.offset + (t - clip.start) * clip.speed;
     const frame = await Media.grabFrame(m, lt, 4096); if (!frame) return UI.toast('Could not grab frame');
     const blob = await new Promise(r => frame.toBlob(r, 'image/png'));
     const file = new File([blob], `${m.name.replace(/\.[^.]+$/, '')}_freeze_${t.toFixed(2)}.png`, { type: 'image/png' });
     const [im] = await Media.importFiles([file]);
-    mutate('Freeze frame', () => { const tr = findTrackOfClip(clip.id); splitClip(clip, t, tr); const fc = Model.newClip('image', { mediaId: im.id, name: im.name, duration: 2, sourceDuration: 2, transform: U.deepClone(clip.transform), effects: U.deepClone(clip.effects), fit: clip.fit, crop: U.deepClone(clip.crop) }); shiftAfter(t, 2); placeClip(fc, tr, t, 'overwrite'); select(fc.id); }); refresh();
+    if (findClip(clip.id) !== clip || !editable(clip)) return;
+    mutate('Freeze frame', () => { const tr = findTrackOfClip(clip.id); const fc = Model.newClip('image', { mediaId: im.id, name: im.name, duration: 2, sourceDuration: 2, transform: U.deepClone(clip.transform), effects: U.deepClone(clip.effects), fit: clip.fit, crop: U.deepClone(clip.crop) }); insertSpace(t, 2); placeClip(fc, tr, t, 'overwrite'); select(fc.id); }); refresh();
   }
   function setProjectSize(w, h) { if (![w, h].every(v => Number.isFinite(v) && v >= 2 && v <= 8192)) return false; mutate('Canvas size', () => { P().width = Math.round(w); P().height = Math.round(h); delete P().canvasCrop; }); Compositor.clearCaches(); Events.emit('project:resized'); }
   function cropCanvas(rect) {
@@ -288,8 +356,8 @@ const Cmd = (() => {
       }
     }));
   }
-  function setFps(f) { if (Number.isInteger(f) && f >= 1 && f <= 120) mutate('Frame rate', () => P().fps = f); }
+  function setFps(f) { if (Number.isFinite(f) && f >= 1 && f <= 120) mutate('Frame rate', () => P().fps = f); }
   function setBackground(c) { mutate('Background', () => P().background = c); }
 
-  return { select, selectAll, deselect, selectForward, selectTrackClips, addTrack, removeTrack, moveTrack, setTrackProp, cleanEmptyTracks, ensureTrack, placeClip, overwriteRange, shiftAfter, firstGapFor, endOf, addMedia, addGenerated, deleteClips, rippleDeleteGap, closeAllGaps, splitClip, splitAt, moveClipTo, trimLeft, trimRight, linkedOf, copy, cut, paste, duplicate, pasteAttributes, setProp, setPropMany, setSpeed, setEnabled, setLabel, rename, unlink, link, detachAudio, nudge, nudgeTrack, alignToPlayhead, setTransition, applyTransitionBetweenSelected, addEffect, removeEffect, moveEffect, resetTransform, fitToFrame, normalizeAudio, toggleKeyframe, setAnimated, setKeyframeEase, clearKeyframes, nextKeyframeTime, fxParamValue, addMarker, removeMarker, updateMarker, clearMarkers, setIn, setOut, clearInOut, extractInOut, freezeFrame, cropCanvas, resetCanvasCrop, centerClip, setProjectSize, setFps, setBackground, MIN_DUR };
+  return { select, selectAll, deselect, selectForward, selectTrackClips, addTrack, removeTrack, moveTrack, setTrackProp, cleanEmptyTracks, ensureTrack, removeMedia, placeClip, overwriteRange, shiftAfter, insertSpace, firstGapFor, endOf, addMedia, addGenerated, deleteClips, rippleDeleteGap, closeAllGaps, splitClip, splitAt, moveClipTo, trimLeft, trimRight, linkedOf, copy, cut, paste, duplicate, pasteAttributes, setProp, setPropMany, setSpeed, setEnabled, setLabel, rename, unlink, link, detachAudio, nudge, nudgeTrack, alignToPlayhead, setTransition, applyTransitionBetweenSelected, addEffect, removeEffect, moveEffect, resetTransform, fitToFrame, normalizeAudio, toggleKeyframe, setAnimated, setKeyframeEase, clearKeyframes, nextKeyframeTime, fxParamValue, addMarker, removeMarker, updateMarker, clearMarkers, setIn, setOut, clearInOut, extractInOut, freezeFrame, cropCanvas, resetCanvasCrop, centerClip, setProjectSize, setFps, setBackground, MIN_DUR };
 })();

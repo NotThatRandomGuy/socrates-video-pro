@@ -166,7 +166,7 @@ const Inspector = (() => {
         U.el('button', { class: 'mini', title: 'Reset', onclick: () => mutate('Reset effect', () => { Object.entries(def.params).forEach(([k, p]) => fx.params[k] = p.def); }) }, '↺'),
         U.el('button', { class: 'mini danger', title: 'Remove', onclick: () => Cmd.removeEffect(c, fx.id) }, '✕'));
       const bodyEl = U.el('div', { class: 'fx-body' });
-      if (def.colorParams) for (const k of Object.keys(def.colorParams)) { const inp = U.el('input', { type: 'color', value: fx.params[k] || def.colorParams[k] }); inp.oninput = () => { fx.params[k] = inp.value; Player.requestRender(); }; inp.onchange = () => mutate('Key color', () => fx.params[k] = inp.value); const pick = fx.type === 'chromakey' ? btn('Pick from preview', () => UI.pickColorFromPreview(col => mutate('Key color', () => fx.params[k] = col))) : null; bodyEl.append(U.el('div', { class: 'field row' }, U.el('label', {}, k === 'keyColor' ? 'Key color' : 'Color'), inp, pick)); }
+      if (def.colorParams) for (const k of Object.keys(def.colorParams)) { const inp = U.el('input', { type: 'color', value: fx.params[k] || def.colorParams[k] }); inp.oninput = () => writeVal(c, KF.fxPath(fx, k), inp.value, false); inp.onchange = () => writeVal(c, KF.fxPath(fx, k), inp.value, true); const pick = fx.type === 'chromakey' ? btn('Pick from preview', () => UI.pickColorFromPreview(col => mutate('Key color', () => fx.params[k] = col))) : null; bodyEl.append(U.el('div', { class: 'field row' }, U.el('label', {}, k === 'keyColor' ? 'Key color' : 'Color'), inp, pick)); }
       for (const [k, p] of Object.entries(def.params)) {
         if (fx.type === 'mask' && k === 'shape') { bodyEl.append(sel(c, 'Shape', KF.fxPath(fx, k), [0, 1, 2], { labels: ['Rectangle', 'Ellipse', 'Rounded'] })); continue; }
         if (p.max === 1 && p.min === 0 && p.step === 1) { bodyEl.append(check(c, p.label, KF.fxPath(fx, k))); continue; }
@@ -174,7 +174,14 @@ const Inspector = (() => {
       }
       if (fx.type === 'lut') {
         const names = Compositor.lutNames(); const s = U.el('select', {}, U.el('option', { value: '' }, '— choose LUT —'), names.map(n => U.el('option', { value: n, selected: fx.lut === n }, n))); s.onchange = () => mutate('LUT', () => fx.lut = s.value || null);
-        bodyEl.append(U.el('div', { class: 'field row' }, U.el('label', {}, 'LUT'), s), btnRow(btn('Load .cube file…', async () => { const files = await U.pickFiles('.cube', true); for (const f of files) { Compositor.registerLUT(f.name, await U.readFileText(f)); fx.lut = f.name; } Events.emit('project:changed'); })));
+        bodyEl.append(U.el('div', { class: 'field row' }, U.el('label', {}, 'LUT'), s), btnRow(btn('Load .cube file…', async () => { const files = await U.pickFiles('.cube', true); for (const f of files) {
+          const contents = await U.readFileText(f);
+          if (findClip(c.id) !== c || findTrackOfClip(c.id)?.locked || !c.effects.includes(fx)) return;
+          const existing = Compositor.exportLUTs();
+          let name = f.name, suffix = 1;
+          while (Object.hasOwn(existing, name) && existing[name] !== contents) name = f.name + ' (' + ++suffix + ')';
+          mutate('Load color lookup table', () => { Compositor.registerLUT(name, contents); fx.lut = name; });
+        } })));
       }
       if (fx.type === 'chromakey') bodyEl.append(btnRow(btn('Green', () => mutate('Key', () => fx.params.keyColor = '#00ff00')), btn('Blue', () => mutate('Key', () => fx.params.keyColor = '#0000ff'))));
       body.append(U.el('div', { class: 'fx' + (fx.enabled ? '' : ' off') }, head, bodyEl));
@@ -256,7 +263,7 @@ const Inspector = (() => {
     const applySize = () => Cmd.setProjectSize(U.clamp(+w.value | 0, 16, 8192), U.clamp(+h.value | 0, 16, 8192));
     ps.onchange = () => { if (ps.value === 'custom') return; const [a, b] = ps.value.split('x').map(Number); w.value = a; h.value = b; applySize(); }; w.onchange = h.onchange = applySize;
     const fpsS = U.el('select', {}, [23.976, 24, 25, 29.97, 30, 50, 59.94, 60].map(f => U.el('option', { value: f, selected: f === P.fps }, f + ' fps'))); fpsS.onchange = () => Cmd.setFps(+fpsS.value);
-    const bg = U.el('input', { type: 'color', value: P.background }); bg.oninput = () => { P.background = bg.value; Player.requestRender(); }; bg.onchange = () => Cmd.setBackground(bg.value);
+    const bg = U.el('input', { type: 'color', value: P.background }); bg.onchange = () => Cmd.setBackground(bg.value);
     body.append(group('Project', U.el('div', { class: 'field' }, U.el('label', {}, 'Name'), nm), U.el('div', { class: 'field' }, U.el('label', {}, 'Resolution preset'), ps), row2(U.el('div', { class: 'field' }, U.el('label', {}, 'Width'), w), U.el('div', { class: 'field' }, U.el('label', {}, 'Height'), h)), U.el('div', { class: 'field row' }, U.el('label', {}, 'Frame rate'), fpsS), U.el('div', { class: 'field row' }, U.el('label', {}, 'Background'), bg)));
     const stats = `${allClips().length} clips · ${videoTracks().length}V/${audioTracks().length}A tracks · ${U.toTimecode(state.duration, P.fps)} · ${state.media.length} media`;
     body.append(group('Info', U.el('div', { class: 'meta' }, stats), btnRow(btn('Remove empty tracks', () => Cmd.cleanEmptyTracks()), btn('Zoom to fit', () => Timeline.zoomFit()))));

@@ -139,7 +139,7 @@ const AudioEngine = (() => {
   function stopAll() { for (const [id, a] of active) cleanup(id, a); active.clear(); if (tickTimer) clearInterval(tickTimer); tickTimer = null; }
   function stop() { playing = false; stopAll(); }
   /* project time: audio clock when the context runs, wall clock otherwise (suspended/autoplay-blocked) */
-  function now() { if (!playing) return state.currentTime; if (actx.state === 'running') return startProj + (actx.currentTime - startCtx) * rate; return startProj + Math.max(0, performance.now() - startWall) / 1000 * rate; }
+  function now() { if (!playing) return state.currentTime; if (actx.state === 'running') return startProj + Math.max(0, actx.currentTime - startCtx) * rate; return startProj + Math.max(0, performance.now() - startWall) / 1000 * rate; }
   function isPlaying() { return playing; }
   /* re-schedule (e.g., after edits during playback) */
   function reschedule() { if (!playing) return; const t = now(); play(t, rate); }
@@ -153,16 +153,19 @@ const AudioEngine = (() => {
 
   /* offline mixdown of [from, to] → AudioBuffer (stereo) */
   async function renderOffline(from, to, sampleRate = 48000) {
-    const dur = Math.max(.05, to - from);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) throw Error('Choose a nonempty audio range');
+    const dur = to - from;
     const oc = new OfflineAudioContext(2, Math.ceil(dur * sampleRate), sampleRate);
     const m = oc.createGain(); m.gain.value = state.muted ? 0 : state.masterVolume; m.connect(oc.destination);
-    let any = false;
+
     for (const { clip, track } of audioClips()) {
       if (clipEnd(clip) <= from || clip.start >= to) continue;
-      const media = findMedia(clip.mediaId); if (!media || !media.audioBuffer) continue;
-      const a = scheduleClip(oc, clip, track, m, from, 0, 1, false); if (a) any = true;
+      if (clip.audio.muted || state.muted || state.masterVolume === 0 || track.volume === 0) continue;
+      const media = findMedia(clip.mediaId);
+      if (media?.audioReady) await media.audioReady;
+      if (!media?.audioBuffer) throw Error('Audio unavailable for ' + clip.name + '. Relink the source before exporting audio.');
+      scheduleClip(oc, clip, track, m, from, 0, 1, false);
     }
-    if (!any) { return oc.startRendering(); }
     return oc.startRendering();
   }
 
@@ -170,7 +173,7 @@ const AudioEngine = (() => {
   let previewSrc = null;
   function previewMedia(m) {
     stopPreview(); if (!m.audioBuffer) return; resume();
-    previewSrc = actx.createBufferSource(); previewSrc.buffer = m.audioBuffer; previewSrc.connect(master); previewSrc.start(0, 0, Math.min(10, m.audioBuffer.duration)); previewSrc.onended = () => previewSrc = null;
+    previewSrc = actx.createBufferSource(); previewSrc.buffer = m.audioBuffer; previewSrc.connect(master); previewSrc.start(0, 0, Math.min(10, m.audioBuffer.duration)); const source = previewSrc; source.onended = () => { source.disconnect(); if (previewSrc === source) previewSrc = null; };
   }
   function stopPreview() { if (previewSrc) { try { previewSrc.stop(); } catch (e) { } previewSrc = null; } }
 

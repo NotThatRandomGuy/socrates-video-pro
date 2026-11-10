@@ -1,7 +1,11 @@
-param([string]$Directory = 'dist/release')
+param([string]$Directory)
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1')
 $root = Split-Path $PSScriptRoot -Parent
+if (!$Directory) {
+  $version = ([IO.File]::ReadAllText((Join-Path $root 'package.json')) | ConvertFrom-Json).version
+  $Directory = Join-Path (Join-Path $root 'dist/release') $version
+}
 $thumbprint = [IO.File]::ReadAllText((Join-Path $root 'signing/thumbprint.txt')).Trim()
 $certificate = Get-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint"
 $privateKey = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($certificate)

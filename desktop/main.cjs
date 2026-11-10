@@ -21,6 +21,20 @@ function supportsMacSystemAudio() {
   const [major, minor] = process.getSystemVersion().split('.').map(Number);
   return major > 14 || (major === 14 && minor >= 2);
 }
+function editMenuItem(label, accelerator, key, nativeAction) {
+  return { label, accelerator, async click() {
+    const contents = win?.webContents;
+    if (!contents || contents.isDestroyed()) return;
+    const handled = await contents.executeJavaScript(`(() => {
+      const focus = document.activeElement;
+      if (document.querySelector('.modal-back') || focus?.matches('input, textarea, select') || focus?.isContentEditable) return false;
+      return !document.dispatchEvent(new KeyboardEvent('keydown', {
+        key: ${JSON.stringify(key)}, metaKey: true, shiftKey: ${nativeAction === 'redo'}, bubbles: true, cancelable: true
+      }));
+    })()`);
+    if (!handled && !contents.isDestroyed()) contents[nativeAction]();
+  } };
+}
 async function createWindow() {
   const entry = pathToFileURL(path.join(__dirname, '..', 'index.html')).href;
   win = new BrowserWindow({ width: 1600, height: 1000, minWidth: 1000, minHeight: 700, show: !smoke, backgroundColor: '#10131b', icon: path.join(__dirname, '..', 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'), webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true } });
@@ -29,7 +43,11 @@ async function createWindow() {
     // Leave Command-M available for the editor's Export command.
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { role: 'appMenu' },
-      { role: 'editMenu' },
+      { label: 'Edit', submenu: [
+        editMenuItem('Undo', 'Cmd+Z', 'z', 'undo'), editMenuItem('Redo', 'Cmd+Shift+Z', 'z', 'redo'),
+        { type: 'separator' }, editMenuItem('Cut', 'Cmd+X', 'x', 'cut'), editMenuItem('Copy', 'Cmd+C', 'c', 'copy'),
+        editMenuItem('Paste', 'Cmd+V', 'v', 'paste'), editMenuItem('Select All', 'Cmd+A', 'a', 'selectAll')
+      ] },
       { label: 'Window', submenu: [{ role: 'close' }, { role: 'zoom' }, { role: 'front' }] }
     ]));
   } else Menu.setApplicationMenu(null);
@@ -71,6 +89,12 @@ async function createWindow() {
         if (!output || output.size < 100) throw Error('Packaged video export failed');
         state.dirty=false;return {width:state.project.width,height:state.project.height,webCodecs:typeof VideoEncoder!=='undefined',sandboxed:typeof require==='undefined',exportBytes:output.size};
       })()`);
+      if (isMac) {
+        const edit = Menu.getApplicationMenu().items.find(item => item.label === 'Edit').submenu;
+        await edit.items.find(item => item.label === 'Copy').click();
+        if (!await win.webContents.executeJavaScript("state.clipboard?.[0]?.clip.kind === 'shape'")) throw Error('Mac Edit menu did not copy the selected clip');
+        await edit.items.find(item => item.label === 'Undo').click();
+      }
       console.log('DESKTOP_SMOKE_PASS ' + JSON.stringify(result)); app.exit(0);
     } catch (e) { console.error(e); app.exit(1); }
   }

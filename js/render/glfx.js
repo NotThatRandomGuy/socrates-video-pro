@@ -64,12 +64,20 @@ const GLFX = (() => {
     outColor=col;
   }`;
 
-  let gl, canvas, prog, loc = {}, texSrc, fbs = [], quad, ok = false, lutTextures = new Map();
+  let gl, canvas, prog, loc = {}, texSrc, fbs = [], quad, attempted = false, ok = false, lutTextures = new Map();
   const MAX = 2048;
 
   function init() {
+    if (attempted) return ok;
+    attempted = true;
     try {
-      canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
+      if (!canvas) {
+        canvas = document.createElement('canvas'); canvas.width = canvas.height = 16;
+        canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); ok = false; });
+        canvas.addEventListener('webglcontextrestored', () => {
+          fbs.length = 0; lutTextures.clear(); attempted = false; init(); Player.requestRender();
+        });
+      }
       gl = canvas.getContext('webgl2', { premultipliedAlpha: false, alpha: true, preserveDrawingBuffer: true, antialias: false, depth: false, stencil: false });
       if (!gl) return false;
       const compile = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };

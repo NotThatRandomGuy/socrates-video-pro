@@ -43,10 +43,11 @@ const U = {
     if (!isFinite(sec)) sec = 0;
     const neg = sec < 0; sec = Math.abs(sec);
     const totalFrames = Math.round(sec * fps);
-    const f = totalFrames % fps;
-    const s = Math.floor(totalFrames / fps) % 60;
-    const m = Math.floor(totalFrames / fps / 60) % 60;
-    const h = Math.floor(totalFrames / fps / 3600);
+    const nominal = Math.round(fps);
+    const f = totalFrames % nominal;
+    const s = Math.floor(totalFrames / nominal) % 60;
+    const m = Math.floor(totalFrames / nominal / 60) % 60;
+    const h = Math.floor(totalFrames / nominal / 3600);
     const p = n => String(n).padStart(2, '0');
     return (neg ? '-' : '') + (h ? p(h) + ':' : '') + p(m) + ':' + p(s) + (showFrames ? ':' + p(f) : '');
   },
@@ -58,7 +59,7 @@ const U = {
     if (parts.some(isNaN)) return NaN;
     let h = 0, m = 0, s = 0, f = 0;
     if (parts.length === 4) [h, m, s, f] = parts; else if (parts.length === 3) [m, s, f] = parts; else if (parts.length === 2) [s, f] = parts; else[f] = parts;
-    return h * 3600 + m * 60 + s + f / fps;
+    return ((h * 3600 + m * 60 + s) * Math.round(fps) + f) / fps;
   },
   snapToFrame: (t, fps) => Math.round(t * fps) / fps,
   fmtDur(sec) { if (!isFinite(sec)) return '--:--'; const m = Math.floor(sec / 60), s = Math.floor(sec % 60); return m + ':' + String(s).padStart(2, '0'); },

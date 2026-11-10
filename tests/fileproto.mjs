@@ -20,4 +20,4 @@ await check('import + GLFX on video + export', `(async () => {
   return px[1] < 60 && got > 500 && persisted >= 1 ? true : { px: Array.from(px), got, persisted, hasAudio: m.hasAudio };
 })()`);
 console.log('\n=== FILE:// RESULTS ==='); for (const [n, r] of results) console.log(`${r.startsWith('PASS') ? 'OK ' : 'XX '} ${n}: ${r}`);
-console.log('errors:', errors.length ? errors : '(none)'); done(); process.exit(results.some(x => !x[1].startsWith('PASS')) || errors.length ? 1 : 0);
+console.log('errors:', errors.length ? errors : '(none)'); await done(); process.exit(results.some(x => !x[1].startsWith('PASS')) || errors.length ? 1 : 0);

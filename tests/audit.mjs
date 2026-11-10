@@ -40,4 +40,4 @@ await mouse('mousePressed',rect.x+2,rect.y+rect.h/2);
 for(let i=1;i<=10;i++)await mouse('mouseMoved',rect.x+2+i*10,rect.y+rect.h/2);
 await mouse('mouseReleased',rect.x+102,rect.y+rect.h/2);
 await check('left trim drag shifts keyframes once, not on every mouse move',`Math.abs(KF.get(findClip(trimId),'transform.x')[0].t+1)<.05?true:{keys:findClip(trimId).keyframes,start:findClip(trimId).start}`);
-console.log('\n=== 1.1.0 AUDIT REGRESSIONS ===');for(const [n,r]of results)console.log(r+': '+n);console.log('Console errors:',errors.length?errors:'(none)');done();process.exit(results.some(([,r])=>r!=='PASS')||errors.length?1:0);
+console.log('\n=== 1.1.0 AUDIT REGRESSIONS ===');for(const [n,r]of results)console.log(r+': '+n);console.log('Console errors:',errors.length?errors:'(none)');await done();process.exit(results.some(([,r])=>r!=='PASS')||errors.length?1:0);
