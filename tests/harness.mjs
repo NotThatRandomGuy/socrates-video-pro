@@ -27,9 +27,17 @@ export async function launch({ port = 0, debugPort = 0, fileProtocol = false } =
   const evalJs = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result.exceptionDetails) throw new Error('eval: ' + (r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text)); return r.result.result.value; };
   await send('Runtime.enable'); await send('Page.enable');
   const url = fileProtocol ? pathToFileURL(path.join(ROOT, 'index.html')).href : `http://127.0.0.1:${port}/index.html`;
-  await send('Page.navigate', { url }); await sleep(2500);
+  await send('Page.navigate', { url });
+  const bootDeadline = Date.now() + 30000;
+  while (!await evalJs("typeof Cmd === 'object' && document.body && !document.body.classList.contains('booting')")) {
+    if (Date.now() > bootDeadline) {
+      chrome.kill(); server.close();
+      throw Error('Editor did not finish startup: ' + errors.join('; '));
+    }
+    await sleep(100);
+  }
   const results = [];
-  const check = async (name, expr) => { console.log('Checking: ' + name); try { const v = await evalJs(expr); results.push([name, v === true ? 'PASS' : 'FAIL: ' + JSON.stringify(v)]); } catch (e) { results.push([name, 'ERROR: ' + e.message]); } };
+  const check = async (name, expr) => { console.log('Checking: ' + name); try { const v = await evalJs(expr); if (v !== true) console.log('Editor status:', await evalJs("[...document.querySelectorAll('.toast')].map(el => el.textContent).join(' | ')")); results.push([name, v === true ? 'PASS' : 'FAIL: ' + JSON.stringify(v)]); } catch (e) { results.push([name, 'ERROR: ' + e.message]); } };
   const done = () => { ws.close(); chrome.kill(); server.close(); setTimeout(() => { if (!path.resolve(userDir).startsWith(path.join(ROOT, 'tests', '.chrome-profile-'))) throw Error('Unexpected profile path'); fs.rm(userDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }, () => {}); }, 500); };
   return { evalJs, check, results, logs, errors, done, sleep, send };
 }

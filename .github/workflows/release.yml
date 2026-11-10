@@ -80,7 +80,6 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npm test
       - run: npm run build:mac -- --${{ matrix.arch }}
       - name: Mount and verify the downloadable Mac app
         env:
@@ -97,6 +96,7 @@ jobs:
           arch="$(uname -m)"
           lipo -verify_arch "$arch" "$binary"
           "$binary" --smoke-test
+      - run: npm test
       - uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}
