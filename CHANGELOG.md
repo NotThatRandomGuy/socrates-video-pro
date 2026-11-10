@@ -25,6 +25,7 @@
 - Preview, snapshots, and video export use the full duration of a transition. Thumbnail and freeze-frame requests no longer compete to seek the same video. Missing visible sources are reported during export.
 - Short audio exports now contain the requested number of samples. Audible missing sources produce an actionable message. Muted tracks can export silence. Switching audio previews or losing microphone access during setup releases the affected resources.
 - MP4 preserves presentation order for reordered frames and duration for long tracks. WebM handles audio starting before the first video frame and uses less memory when assembling the download. Partial final frames respect the selected end time.
+- An MP4 encoder that stops responding mid-export now retries in WebM. Closing or cancelling a stalled encoding job releases its resources. The paused preview redraws when media or fonts arrive and can otherwise stay idle.
 - Graphics effects recover after a lost graphics context. Shape complexity and effect values are bounded, and wrapped text preserves word animation timing.
 
 ## 1.1.0 — 2026-11-01

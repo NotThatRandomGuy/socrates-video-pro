@@ -100,10 +100,23 @@ const Exporter = (() => {
     catch (e) { UI.toast(e.message === 'cancelled' ? 'Export cancelled' : 'Export failed: ' + e.message, 6000); return false; }
     finally { Player.pause(); state.loop = loop; state.exporting = false; busy = false; Player.seek(time); }
   }
+  class EncoderFailure extends Error {}
   function checkCancel(error) { if (cancelFlag) throw Error('cancelled'); if (error) throw error; }
   async function waitQueue(encoder, limit, error) {
     const started = performance.now();
-    while (encoder.encodeQueueSize > limit) { checkCancel(error()); if (performance.now() - started > 15000) throw Error('Encoder stopped responding'); await U.sleep(5); }
+    while (encoder.encodeQueueSize > limit) { checkCancel(error()); if (performance.now() - started > 15000) throw new EncoderFailure('Encoder stopped responding'); await U.sleep(5); }
+    checkCancel(error());
+  }
+  async function flushEncoder(encoder, error) {
+    let complete = false, failure;
+    encoder.flush().then(() => { complete = true; }, reason => { failure = reason; complete = true; });
+    const start = performance.now();
+    while (!complete) {
+      checkCancel(error());
+      if (performance.now() - start > 30000) throw new EncoderFailure('Encoder did not finish');
+      await U.sleep(25);
+    }
+    if (failure) throw new EncoderFailure(failure.message);
     checkCancel(error());
   }
   async function seekAll(t) {
@@ -130,7 +143,17 @@ const Exporter = (() => {
     const draw = t => { ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle = p.background; ctx.fillRect(0,0,o.width,o.height); ctx.setTransform(scale,0,0,scale,(o.width-p.width*scale)/2,(o.height-p.height*scale)/2); Compositor.renderFrame(ctx,t); };
     return { cv, draw };
   }
-  function exportWebCodecs(o) { return guarded(o, runWebCodecs); }
+  function exportWebCodecs(o) {
+    return guarded(o, async options => {
+      try { return await runWebCodecs(options); }
+      catch (error) {
+        if (!(error instanceof EncoderFailure) || options.format.container !== 'mp4') throw error;
+        checkCancel();
+        UI.toast('MP4 encoder stopped. Retrying this export as WebM.');
+        return runWebCodecs({ ...options, format: FORMATS[1] });
+      }
+    });
+  }
   async function runWebCodecs(o) {
     let vcfg = await pickCodec(o.format, o.width, o.height, o.fps, o.bitrate);
     if (!vcfg) { UI.toast('Selected encoder unavailable; using WebM'); o.format = FORMATS[1]; vcfg = await pickCodec(o.format, o.width, o.height, o.fps, o.bitrate); if (!vcfg) return runRealtime(o); }
@@ -142,7 +165,7 @@ const Exporter = (() => {
       checkCancel(error);
       const audioInfo = acfg ? {codec:acfg.codec.startsWith('mp4a')?'aac':'opus', sampleRate:48000, channels:2} : null;
       const mux = o.format.container === 'mp4' ? new MP4Muxer({width:o.width,height:o.height,fps:o.fps,audio:audioInfo}) : new WebMMuxer({width:o.width,height:o.height,fps:o.fps,videoCodec:o.format.webmCodec,audio:audioInfo?{codec:'A_OPUS',sampleRate:48000,channels:2}:null,duration:dur});
-      venc = new VideoEncoder({output:(chunk,meta)=>mux.addVideo(chunk,meta),error:e=>error=e}); venc.configure(vcfg);
+      venc = new VideoEncoder({output:(chunk,meta)=>mux.addVideo(chunk,meta),error:e=>error=new EncoderFailure(e.message)}); venc.configure(vcfg);
       const {cv,draw} = outputCanvas(o);
       for (let i=0;i<total;i++) {
         checkCancel(error); const t=o.from+i/o.fps; await seekAll(t); draw(t);
@@ -153,16 +176,16 @@ const Exporter = (() => {
         await waitQueue(venc,4,()=>error);
         if(i%5===0){ui.set(i);if(i%15===0)ui.thumb(cv);await U.nextFrame();}
       }
-      await venc.flush(); checkCancel(error);
+      await flushEncoder(venc, () => error);
       if(acfg&&audioBuf){
-        ui.set(total,'Encoding audio…');aenc=new AudioEncoder({output:(chunk,meta)=>mux.addAudio(chunk,meta),error:e=>error=e});aenc.configure(acfg);
+        ui.set(total,'Encoding audio…');aenc=new AudioEncoder({output:(chunk,meta)=>mux.addAudio(chunk,meta),error:e=>error=new EncoderFailure(e.message)});aenc.configure(acfg);
         const frames=acfg.codec==='opus'?960:1024,L=audioBuf.getChannelData(0),R=audioBuf.numberOfChannels>1?audioBuf.getChannelData(1):L;
         for(let p=0;p<audioBuf.length;p+=frames){
           checkCancel(error);const len=Math.min(frames,audioBuf.length-p),data=new Float32Array(len*2);data.set(L.subarray(p,p+len));data.set(R.subarray(p,p+len),len);
           const ad=new AudioData({format:'f32-planar',sampleRate:48000,numberOfFrames:len,numberOfChannels:2,timestamp:Math.round(p/48000*1e6),data});
           try{aenc.encode(ad);}finally{ad.close();}await waitQueue(aenc,20,()=>error);
         }
-        await aenc.flush();checkCancel(error);
+        await flushEncoder(aenc, () => error);
       }
       ui.set(total,'Writing file…');await U.nextFrame();checkCancel(error);const blob=mux.finalize();U.download(blob,o.name+'.'+o.format.ext);UI.toast('Exported '+o.name+'.'+o.format.ext);return true;
     } finally { for(const encoder of [venc,aenc]) if(encoder&&encoder.state!=='closed') encoder.close();ui.close(); }

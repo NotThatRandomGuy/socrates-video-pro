@@ -113,6 +113,6 @@
   document.body.classList.remove('booting');
   // unlock audio on first interaction
   const unlock = () => { AudioEngine.resume(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); }; window.addEventListener('pointerdown', unlock); window.addEventListener('keydown', unlock);
-  // periodic re-render while paused so late-loading media shows up
-  setInterval(() => { if (!state.playing) Player.requestRender(); }, 1000);
+  Events.on('media:changed', () => Player.requestRender());
+  document.fonts?.addEventListener('loadingdone', () => Player.requestRender());
 })();

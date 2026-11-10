@@ -95,6 +95,26 @@ await regression('MP4 writes signed presentation offsets and a 64-bit duration',
   return composition > 0 && view.getUint8(composition+4) === 1 && view.getInt32(composition+32) === -100000
     && duration > 0 && view.getUint8(duration+4) === 1 && view.getBigUint64(duration+28) === 5000300000n;
 });
+await regression('an MP4 encoder that fails after configuration retries the export as WebM', async () => {
+  Cmd.addGenerated('shape', {}, {duration:1});
+  const Native = window.VideoEncoder, download = U.download;
+  let file;
+  window.VideoEncoder = class {
+    static isConfigSupported(cfg) { return cfg.codec.startsWith('avc1') ? Promise.resolve({supported:true}) : Native.isConfigSupported(cfg); }
+    constructor(callbacks) { this.callbacks = callbacks; this.encodeQueueSize = 0; }
+    configure(cfg) {
+      if (!cfg.codec.startsWith('avc1')) { this.real = new Native(this.callbacks); this.real.configure(cfg); }
+    }
+    encode(...args) { if (this.real) this.real.encode(...args); else this.callbacks.error(Error('Encoder unavailable')); }
+    flush() { return this.real?.flush() ?? Promise.resolve(); }
+    close() { this.real?.close(); }
+  };
+  U.download = (blob,name) => { file = {name,bytes:blob.size}; };
+  try {
+    const ok = await Exporter.exportWebCodecs({format:Exporter.FORMATS[0],width:160,height:90,fps:10,bitrate:300000,audio:false,from:0,to:.2,name:'fallback'});
+    return ok && file.name === 'fallback.webm' && file.bytes > 100 && !state.exporting;
+  } finally { window.VideoEncoder = Native; U.download = download; }
+});
 for (const [name, result] of results) console.log(result + ': ' + name);
 console.log('Console errors:', errors.length ? errors : '(none)');
 await done();
