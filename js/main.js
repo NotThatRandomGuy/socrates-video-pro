@@ -27,8 +27,8 @@
   $('#btnSafe').onclick = () => { state.showSafeAreas = !state.showSafeAreas; $('#btnSafe').classList.toggle('active', state.showSafeAreas); Preview.drawOverlay(); };
   $('#previewZoomSel').onchange = (e) => Preview.setZoom(e.target.value);
   $('#qualitySel').onchange = (e) => { state.previewQuality = +e.target.value; Player.requestRender(); };
-  $('#masterVol').oninput = (e) => { state.masterVolume = +e.target.value; AudioEngine.updateMix(); };
-  $('#btnMute').onclick = () => { state.muted = !state.muted; $('#btnMute').textContent = state.muted ? '🔇' : '🔊'; AudioEngine.updateMix(); };
+  $('#masterVol').oninput = (e) => { state.masterVolume = +e.target.value; AudioEngine.updateMix(); state.dirty = true; Events.emit('project:changed'); };
+  $('#btnMute').onclick = () => { state.muted = !state.muted; $('#btnMute').textContent = state.muted ? '🔇' : '🔊'; AudioEngine.updateMix(); state.dirty = true; Events.emit('project:changed'); };
   $('#tcCurrent').onclick = async () => { const v = await UI.prompt('Go to timecode', U.toTimecode(state.currentTime, state.project.fps)); if (v !== null) { const t = U.parseTimecode(v, state.project.fps); if (!isNaN(t)) Player.seek(t); } };
   const tlTc = $('#tlTimecode'); tlTc.onchange = () => { const t = U.parseTimecode(tlTc.value, state.project.fps); if (!isNaN(t)) Player.seek(t); tlTc.blur(); }; tlTc.onkeydown = (e) => { if (e.key === 'Enter') tlTc.onchange(); e.stopPropagation(); };
   /* toolbar */
@@ -110,6 +110,7 @@
   if (restored) UI.toast('Recovered previous session'); else Events.emit('project:changed');
   Events.emit('media:changed'); Events.emit('selection:changed'); Events.emit('time:changed'); Events.emit('playback:changed');
   Preview.layout(); Player.requestRender(); UI.refreshToolbar();
+  await Startup.init(restored);
   document.body.classList.remove('booting');
   // unlock audio on first interaction
   const unlock = () => { AudioEngine.resume(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); }; window.addEventListener('pointerdown', unlock); window.addEventListener('keydown', unlock);

@@ -154,6 +154,7 @@ const Media = (() => {
     const m = findMedia(id); if (!m) return;
     state.media = state.media.filter(x => x.id !== id);
     try { URL.revokeObjectURL(m.url); } catch (e) { }
+    const decoder = scratch.get(id); if (decoder) { decoder.pause(); decoder.removeAttribute('src'); decoder.load(); }
     scratch.delete(id); DB.delFile(id); Events.emit('media:changed');
   }
 
@@ -192,13 +193,20 @@ const Media = (() => {
   async function relink(m) {
     const [f] = await U.pickFiles('video/*,audio/*,image/*', false); if (!f) return;
     if (typeOf(f) !== m.type) return UI.toast('Choose a replacement of the same media type');
+    const [replacement] = await importFiles([f], { persist: false });
+    if (replacement.error || !replacement.duration) { remove(replacement.id); return UI.toast('Cannot decode the replacement file'); }
+    if (findMedia(m.id) !== m) { remove(replacement.id); return; }
     Player.pause(); AudioEngine.resetMedia();
     // Existing clip players otherwise keep the old missing/replaced object URL.
     mediaUsedBy(m.id).forEach(c => releaseClip(c.id));
     scratch.delete(m.id);
     if (m.url) URL.revokeObjectURL(m.url);
     const idx = state.media.indexOf(m); if (idx >= 0) state.media.splice(idx, 1);
-    await importFiles([f], { id: m.id }); Events.emit('project:changed');
+    state.media = state.media.filter(item => item !== replacement);
+    replacement.id = m.id; replacement.name = m.name; replacement.tags = m.tags || [];
+    state.media.splice(Math.max(0, idx), 0, replacement);
+    DB.putFile(m.id, { name: replacement.name, type: f.type, blob: f, tags: replacement.tags });
+    Events.emit('media:changed'); Events.emit('project:changed');
   }
 
   /* placeholder media entry for a project loaded without its files */

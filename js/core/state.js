@@ -127,7 +127,11 @@ const Model = {
   normalizeClip(c) {
     const d = Model.newClip(c.kind || 'video');
     const merge = (a, b) => { for (const k in b) if (a[k] === undefined) a[k] = b[k]; else if (a[k] && typeof a[k] === 'object' && !Array.isArray(a[k]) && typeof b[k] === 'object' && !Array.isArray(b[k])) merge(a[k], b[k]); return a; };
-    merge(c, d); return c;
+    merge(c, d);
+    if (Array.isArray(c.effects)) for (const fx of c.effects) {
+      if (fx && Object.hasOwn(EFFECT_DEFS, fx.type)) merge(fx, Model.newEffect(fx.type));
+    }
+    return c;
   },
   normalizeProject(p) {
     const d = Model.newProject(); for (const k in d) if (p[k] === undefined) p[k] = d[k];
@@ -168,6 +172,7 @@ const History = (() => {
     media: mediaId ? { id: mediaId, item: findMedia(mediaId), index: state.media.findIndex(m => m.id === mediaId) } : null,
     project: JSON.stringify(state.project, (key, value) => { if (typeof value === 'number' && !Number.isFinite(value)) throw Error('Project values must be finite'); return value; }), sel: [...state.selection] });
   const restore = (s) => {
+    Player.pause(); AudioEngine.resetMedia();
     state.project = JSON.parse(s.project); state.selection = new Set(s.sel.filter(id => findClip(id)));
     if (s.media) Media.restoreEntry(s.media);
     recalcDuration(); Media.gcClipEls();

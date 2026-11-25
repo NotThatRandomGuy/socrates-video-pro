@@ -80,10 +80,15 @@ async function createWindow() {
       const result = await win.webContents.executeJavaScript(`(async () => {
         if (document.body.classList.contains('booting')) throw Error('Boot failed');
         if (typeof require !== 'undefined') throw Error('Renderer Node integration enabled');
+        if (!document.querySelector('.welcome') || !document.querySelector('.welcome-tutorial')) throw Error('Welcome screen missing');
+        Startup.close();
         Cmd.addGenerated('shape'); Cmd.cropCanvas({x:100,y:100,width:1000,height:800}); Cmd.centerClip();
         const cv=document.createElement('canvas');cv.width=1000;cv.height=800;Compositor.renderFrame(cv.getContext('2d'),0);
         const pixel=cv.getContext('2d').getImageData(500,400,1,1).data;
         if (pixel[3] !== 255 || !History.canUndo()) throw Error('Render/history failed');
+        const saved = Project.serialize();
+        await Project.load(JSON.parse(JSON.stringify(saved)));
+        if (state.project.width !== 1000 || allClips().length !== 1) throw Error('Packaged project round trip failed');
         let output; const download=U.download; U.download=(blob)=>output=blob;
         try { await Exporter.exportWebCodecs({format:Exporter.FORMATS[1],width:160,height:128,fps:10,bitrate:300000,audio:false,from:0,to:.2,name:'desktop-smoke'}); } finally { U.download=download; }
         if (!output || output.size < 100) throw Error('Packaged video export failed');

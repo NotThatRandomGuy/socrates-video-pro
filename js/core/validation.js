@@ -14,9 +14,14 @@ const ProjectValidation = (() => {
     }
     walk(data);
     if (!data || !data.project || typeof data.project !== 'object' || Array.isArray(data.project)) throw Error('Not a valid project file');
+    if (data.app && data.app !== 'VideoEditorPro') throw Error('This file belongs to another application');
+    if (data.version !== undefined && (!Number.isInteger(data.version) || data.version < 1 || data.version > 2)) throw Error('Unsupported project format version');
+    if (data.luts !== undefined && (!data.luts || Array.isArray(data.luts) || typeof data.luts !== 'object' || Object.values(data.luts).some(v => typeof v !== 'string'))) throw Error('Invalid color lookup tables');
+    if (data.mix !== undefined && (!data.mix || typeof data.mix.volume !== 'number' || data.mix.volume < 0 || data.mix.volume > 1.5 || typeof data.mix.muted !== 'boolean')) throw Error('Invalid master mix');
     const copy = U.deepClone(data), p = copy.project;
     if (p.tracks !== undefined && !Array.isArray(p.tracks)) throw Error('Invalid project tracks');
     for (const t of p.tracks || []) if (!t || !['video','audio'].includes(t.kind) || !Array.isArray(t.clips)) throw Error('Invalid track');
+    for (const t of p.tracks || []) for (const c of t.clips) if (!c || typeof c !== 'object' || Array.isArray(c)) throw Error('Invalid clip');
     Model.normalizeProject(p);
     const number = (v, min, max, name) => { if (!Number.isFinite(v) || v < min || v > max) throw Error('Invalid ' + name); };
     number(p.width, 2, 8192, 'canvas width'); number(p.height, 2, 8192, 'canvas height'); number(p.fps, 1, 120, 'frame rate');
@@ -42,6 +47,12 @@ const ProjectValidation = (() => {
         identity(c.id); if (!CLIP_KINDS.includes(c.kind) || (t.kind === 'audio') !== (c.kind === 'audio')) throw Error('Clip is on an incompatible track');
         shape(c, Model.newClip(c.kind), 'clip');
         number(c.start, 0, 864000, 'clip start'); number(c.duration, Number.MIN_VALUE, 864000, 'clip duration'); number(c.speed, .05, 16, 'speed'); number(c.offset, 0, 864000, 'source offset'); number(c.sourceDuration, 0, 864000, 'source duration');
+        if (c.mediaId !== null && (typeof c.mediaId !== 'string' || !c.mediaId)) throw Error('Invalid media identifier');
+        for (const transition of [c.transitionIn, c.transitionOut]) {
+          if (!TRANSITION_TYPES.includes(transition.type)) throw Error('Invalid transition');
+          number(transition.duration, 0, 864000, 'transition duration');
+        }
+        if (c.keyframes === null || typeof c.keyframes !== 'object' || Array.isArray(c.keyframes)) throw Error('Invalid keyframe data');
         if (c.linkId !== null && typeof c.linkId !== 'string') throw Error('Invalid clip link');
         if (c.shape) {
           number(c.shape.points, 3, 512, 'shape point count');
@@ -52,12 +63,12 @@ const ProjectValidation = (() => {
         }
         const effectIds = new Set();
         for (const fx of c.effects) { if (!fx || !Object.hasOwn(EFFECT_DEFS, fx.type)) throw Error('Unknown effect'); shape(fx, Model.newEffect(fx.type), 'effect');
-          if (!fx.id || effectIds.has(fx.id)) throw Error('Duplicate or missing effect identifier');
+          if (typeof fx.id !== 'string' || !fx.id || effectIds.has(fx.id)) throw Error('Duplicate or missing effect identifier');
           effectIds.add(fx.id); }
         for (const [path, keys] of Object.entries(c.keyframes)) {
           if (!KF.KEYABLE.includes(path) && !/^fx\.[\w-]+\.[\w]+$/.test(path)) throw Error('Invalid animated property');
           if (!Array.isArray(keys)) throw Error('Invalid keyframes');
-          for (const k of keys) { number(k.t, -864000, 864000, 'keyframe time'); number(k.v, -1e9, 1e9, 'keyframe value'); }
+          for (const k of keys) { if (!k || typeof k !== 'object') throw Error('Invalid keyframe'); number(k.t, -864000, 864000, 'keyframe time'); number(k.v, -1e9, 1e9, 'keyframe value'); }
           keys.sort((a, b) => a.t - b.t);
         }
       }

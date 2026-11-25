@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.2.5 — 2026-11-25
+
+### Major Updates
+
+- Added a startup welcome screen with Create New Project, Open Existing Project, Open File in Editor, and Continue Editing. Imported files open in sequence on the timeline.
+- Added an optional guided tutorial covering media, the timeline, tracks, ripple editing, preview, cropping, alignment, animation, effects, titles, audio, recording, saving, recovery, and export. First startup offers the tour, and every welcome screen includes a small tutorial button.
+
+### Minor Updates
+
+- Welcome and Tutorial are available in Help. The tutorial has Next, Back, Skip, and Finish controls and highlights the area being explained.
+- Added project-file and startup regression checks, including downloaded saves, legacy project migration, damaged files, first-run preferences, and tutorial navigation.
+- Checked the packaging dependencies for published security advisories.
+
+### Bug Fixes
+
+- Saved projects now preserve master volume and mute, so reopening keeps the export mix. Earlier projects open with the default master mix.
+- Project snapshots are independent copies, preventing later edits from changing an already captured save.
+- Saving validates the file before download. Failed saves keep the project marked as unsaved.
+- Older project files with missing effect settings receive defaults. Files containing a leading byte-order mark open correctly.
+- Clips referring to missing sources get a relinkable Media entry even when the older project file omits its media list. Saved media names and tags are restored for cached sources.
+- Invalid lookup tables, master mixes, transitions, keyframes, clip entries, and unsupported format versions are rejected before replacing the current project or undo history.
+- Opening another project during export is prevented. Undo and redo stop stale playback and reset audio connections.
+- A failed media replacement keeps the original source. Successful replacement preserves its name and tags. Removing media releases its scratch video decoder.
+- Keyboard focus enters dialogs containing only buttons. Closing or skipping the tutorial removes its highlight and listeners.
+
 ## 1.2.0 — 2026-11-09
 
 ### Major Updates

@@ -1,6 +1,6 @@
 # Socrates Video Pro
 
-A local, multitrack video editor for the web, Windows, Linux, and macOS. Edit, animate, mix, and export on your own machine. The browser app has no runtime dependencies or build step; the desktop apps bundle Chromium with Electron. See the [1.2.0 changelog](CHANGELOG.md).
+A local, multitrack video editor for the web, Windows, Linux, and macOS. Edit, animate, mix, and export on your own machine. The browser app has no runtime dependencies or build step; the desktop apps bundle Chromium with Electron. See the [1.2.5 changelog](CHANGELOG.md).
 
 ![Socrates Video Pro workspace](tests/screenshot.png)
 
@@ -10,12 +10,12 @@ Download the latest files from [Releases](https://github.com/NotThatRandomGuy/so
 
 | Download | How to use it |
 | --- | --- |
-| `Socrates-Video-Pro-1.2.0-Setup-x64.exe` | Windows 10/11, 64-bit. Run the installer, choose a folder, and launch from Start or the desktop shortcut. Uninstall through Windows Settings. |
-| `Socrates-Video-Pro-1.2.0-Portable-x64.exe` | Place in a writable folder and run. No installation is required. Recovery and media cache live in the adjacent `SocratesVideoPro-data` folder; keep that folder with the executable when moving it. |
-| `Socrates-Video-Pro-1.2.0-Linux-x86_64.AppImage` | Linux x86-64, Ubuntu 22.04 or compatible. Make executable and launch; instructions below. |
-| `Socrates-Video-Pro-1.2.0-Linux-amd64.deb` | Debian/Ubuntu x86-64. Install with the system package manager; instructions below. |
-| `Socrates-Video-Pro-1.2.0-macOS-arm64.dmg` | macOS 13 or later on Apple silicon (M-series). Open the disk image and drag the app to Applications. |
-| `Socrates-Video-Pro-1.2.0-macOS-x64.dmg` | macOS 13 or later on an Intel Mac. Open the disk image and drag the app to Applications. |
+| `Socrates-Video-Pro-1.2.5-Setup-x64.exe` | Windows 10/11, 64-bit. Run the installer, choose a folder, and launch from Start or the desktop shortcut. Uninstall through Windows Settings. |
+| `Socrates-Video-Pro-1.2.5-Portable-x64.exe` | Place in a writable folder and run. No installation is required. Recovery and media cache live in the adjacent `SocratesVideoPro-data` folder; keep that folder with the executable when moving it. |
+| `Socrates-Video-Pro-1.2.5-Linux-x86_64.AppImage` | Linux x86-64, Ubuntu 22.04 or compatible. Make executable and launch; instructions below. |
+| `Socrates-Video-Pro-1.2.5-Linux-amd64.deb` | Debian/Ubuntu x86-64. Install with the system package manager; instructions below. |
+| `Socrates-Video-Pro-1.2.5-macOS-arm64.dmg` | macOS 13 or later on Apple silicon (M-series). Open the disk image and drag the app to Applications. |
+| `Socrates-Video-Pro-1.2.5-macOS-x64.dmg` | macOS 13 or later on an Intel Mac. Open the disk image and drag the app to Applications. |
 | `Socrates-Video-Pro-Web.zip` | Extract and open `index.html` in current Chrome or Edge. You can also serve the extracted files from any static web host. |
 
 Windows executables are signed locally with a **self-signed** certificate attributed to NotThatRandomGuy. Windows can still show an unknown-publisher warning. The public certificate is included; its non-exportable private key stays on the signing machine. All release downloads are covered by a locally signed checksum list, including the Mac disk images, Linux packages, and web ZIP. See verification below.
@@ -35,21 +35,21 @@ Allow camera, microphone, or screen recording in **Privacy & Security** when pro
 For AppImage:
 
 ```sh
-chmod +x Socrates-Video-Pro-1.2.0-Linux-x86_64.AppImage
-./Socrates-Video-Pro-1.2.0-Linux-x86_64.AppImage
+chmod +x Socrates-Video-Pro-1.2.5-Linux-x86_64.AppImage
+./Socrates-Video-Pro-1.2.5-Linux-x86_64.AppImage
 ```
 
 If your distribution lacks AppImage's FUSE support, extract and run instead:
 
 ```sh
-./Socrates-Video-Pro-1.2.0-Linux-x86_64.AppImage --appimage-extract
+./Socrates-Video-Pro-1.2.5-Linux-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
 For Debian/Ubuntu:
 
 ```sh
-sudo apt install ./Socrates-Video-Pro-1.2.0-Linux-amd64.deb
+sudo apt install ./Socrates-Video-Pro-1.2.5-Linux-amd64.deb
 socrates-video-pro
 # To uninstall:
 sudo apt remove socrates-video-pro
@@ -58,6 +58,12 @@ sudo apt remove socrates-video-pro
 Linux keeps recovery and media cache in your user configuration directory (normally `~/.config/Socrates Video Pro`). Launch as your normal user. The AppImage requires working unprivileged user namespaces; if your distribution restricts them, use the Debian package with its installed sandbox helper. The app keeps Chromium's sandbox enabled. Wayland screen capture needs a working PipeWire desktop portal. Linux screen recording supports video and microphone capture; system-audio loopback is not provided by this desktop integration. Camera, microphone, codecs, and GPU support depend on your distribution and hardware.
 
 To run the source in a browser, download or clone this repository and open `index.html`. Alternatively, with Node.js 24 installed, run `node scripts/serve.mjs` and open [localhost:8765](http://localhost:8765). Recording requires a secure context: HTTPS, localhost, or the desktop app. Support for file-based recording depends on your browser.
+
+## Welcome and tutorial
+
+Every launch offers **Create New Project**, **Open Existing Project**, **Open File in Editor**, and **Continue Editing** (or **Explore the Editor** for an empty workspace). Continue resumes the session recovered from this browser or desktop app. Open File imports video, audio, or images and places them in sequence from the playhead.
+
+First startup offers an optional tutorial. Choose **Take the tutorial** to walk through the workspace, editing tools, recording, project files, and export. Use **Next**, **Back**, **Skip tutorial**, or **Finish**. The tutorial preserves your work. On later launches, its small button remains below the main actions. **Help → Tutorial** and **Help → Welcome screen** reopen them while editing. The first-run preference is stored locally for each browser profile or desktop installation.
 
 ## Start editing
 
@@ -73,7 +79,7 @@ Canvas cropping applies to the whole project. The Inspector's clip crop controls
 
 Media editing and export happen locally. There is no upload service or account requirement. Optional Google Fonts are fetched from Google when online; offline use falls back to installed fonts, so typography can differ.
 
-Autosave and imported media are cached in IndexedDB. Browser caches, installed-app data, and portable-app data are separate. A project file stores editing instructions and media references, **not the original media files**. Keep your originals alongside saved projects. To move a project between machines, copy both; then double-click missing items in the Media panel to relink them. Browser storage may be evicted or cleared, so autosave is recovery assistance rather than a backup.
+Autosave and imported media are cached in IndexedDB. Browser caches, installed-app data, and portable-app data are separate. A project file stores editing instructions, master volume and mute, and media references, **not the original media files**. Keep your originals alongside saved projects. To move a project between machines, copy both; then double-click missing items in the Media panel to relink them. Browser storage may be evicted or cleared, so autosave is recovery assistance rather than a backup.
 
 Codec availability depends on the browser, hardware, and operating system. MP4/H.264 with AAC and WebM with Opus are offered where supported; unsupported video encoders fall back to WebM. HEVC and AV1 are optional. Unsupported source codecs may need conversion before import. Large projects require substantial RAM and disk space, and exports are assembled in memory. The desktop editions use the same editor and share these limits.
 
@@ -169,6 +175,7 @@ node tests/fileproto.mjs  # verifies file:// operation (direct double-click of i
 node tests/canvas.mjs     # crop pixels, save/load, undo, snapping, dialogs, cropped export
 node tests/audit.mjs      # project safety, editing, audio, GPU, recording and export regressions
 node tests/version120.mjs # linked edits, media undo, recovery, fractional rates, audio and MP4 timing
+node tests/version125.mjs # startup, tutorial, downloaded project round trips and damaged files
 node tests/screenshot.mjs # renders a populated project → tests/screenshot.png
 ```
 

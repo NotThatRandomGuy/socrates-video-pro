@@ -23,7 +23,7 @@ const UI = (() => {
       };
       box.append(U.el('div', { class: 'modal-head' }, U.el('span', {}, title), U.el('button', { class: 'mini', onclick: () => close(null) }, '✕')), U.el('div', { class: 'modal-body' }, content), U.el('div', { class: 'modal-foot' }, buttons.map(b => U.el('button', { class: b.primary ? 'primary' : (b.danger ? 'danger' : ''), onclick: () => close(b.value ?? (b.primary ? true : false)) }, b.label))));
       back.appendChild(box); back.onclick = (e) => { if (e.target === back) close(null); }; document.body.appendChild(back); document.addEventListener('keydown', kd);
-      const f = box.querySelector('input,textarea,select'); if (f) { f.focus(); f.select && f.select(); }
+      const f = box.querySelector('input,textarea,select'); if (f) { f.focus(); f.select && f.select(); } else box.querySelector('button:not(.mini)')?.focus();
       if (signal?.aborted) close(null); else signal?.addEventListener('abort', abort, { once: true });
     });
   }
@@ -152,7 +152,7 @@ const UI = (() => {
         { label: 'Fullscreen preview', key: 'Ctrl+Shift+F', action: () => Preview.fullscreen() }, { sep: true },
         { label: 'Toggle media panel', action: () => document.body.classList.toggle('hide-left') }, { label: 'Toggle inspector', action: () => document.body.classList.toggle('hide-right') },
       ],
-      Help: () => [{ label: 'Keyboard shortcuts', key: '?', action: () => shortcutsDialog() }, { label: 'About', action: () => alert('Video Editor Pro', 'A browser-based non-linear editor.<br><br>• Multi-track timeline with ripple/insert editing, snapping, markers, In/Out<br>• Keyframe animation with easing<br>• GPU color grading, keying, masks, LUTs<br>• Web Audio mixing with EQ, fades, meters<br>• Frame-accurate WebCodecs export (MP4 / WebM)<br><br>Everything runs locally in your browser — your media never leaves your machine.') }],
+      Help: () => [{ label: 'Welcome screen', action: () => Startup.show() }, { label: 'Tutorial', action: () => Startup.tutorial() }, { label: 'Keyboard shortcuts', key: '?', action: () => shortcutsDialog() }, { label: 'About', action: () => alert('Video Editor Pro', 'A browser-based non-linear editor.<br><br>• Multi-track timeline with ripple/insert editing, snapping, markers, In/Out<br>• Keyframe animation with easing<br>• GPU color grading, keying, masks, LUTs<br>• Web Audio mixing with EQ, fades, meters<br>• Frame-accurate WebCodecs export (MP4 / WebM)<br><br>Everything runs locally in your browser — your media never leaves your machine.') }],
     };
     for (const [name, build] of Object.entries(menus)) {
       const b = U.el('button', { class: 'menu-btn' }, name); b.onclick = (e) => { const r = b.getBoundingClientRect(); menu(r.left, r.bottom + 2, build()); }; b.onmouseenter = () => { if (menuEl) b.click(); }; bar.appendChild(b);

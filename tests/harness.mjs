@@ -32,6 +32,7 @@ export async function launch({ port = 0, debugPort = 0, fileProtocol = false } =
     }
     await sleep(100);
   }
+  await evalJs('Startup.close()');
   const results = [];
   const check = async (name, expr) => { console.log('Checking: ' + name); try { const v = await evalJs(expr); if (v !== true) console.log('Editor status:', await evalJs("[...document.querySelectorAll('.toast')].map(el => el.textContent).join(' | ')")); results.push([name, v === true ? 'PASS' : 'FAIL: ' + JSON.stringify(v)]); } catch (e) { results.push([name, 'ERROR: ' + e.message]); } };
   const done = async () => {
