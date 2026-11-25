@@ -89,6 +89,7 @@ async function createWindow() {
         const saved = Project.serialize();
         await Project.load(JSON.parse(JSON.stringify(saved)));
         if (state.project.width !== 1000 || allClips().length !== 1) throw Error('Packaged project round trip failed');
+        Cmd.select(allClips()[0].id);
         let output; const download=U.download; U.download=(blob)=>output=blob;
         try { await Exporter.exportWebCodecs({format:Exporter.FORMATS[1],width:160,height:128,fps:10,bitrate:300000,audio:false,from:0,to:.2,name:'desktop-smoke'}); } finally { U.download=download; }
         if (!output || output.size < 100) throw Error('Packaged video export failed');
