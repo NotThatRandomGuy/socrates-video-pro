@@ -29,6 +29,7 @@
     "electron-builder": "26.18.0"
   },
   "build": {
+    "asarUnpack": ["desktop/verify-update.ps1"],
     "appId": "io.github.notthatrandomguy.socrates-video-pro",
     "productName": "Socrates Video Pro",
     "directories": {

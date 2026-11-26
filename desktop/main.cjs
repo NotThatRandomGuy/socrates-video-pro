@@ -77,6 +77,10 @@ async function createWindow() {
   if (smoke) {
     try {
       await new Promise(resolve => setTimeout(resolve, 3000));
+      if(process.platform==='win32' && app.isPackaged) {
+        const verifier=path.join(process.resourcesPath,'app.asar.unpacked','desktop','verify-update.ps1');
+        if(!fs.existsSync(verifier))throw Error('Packaged Windows update verifier missing');
+      }
       const result = await win.webContents.executeJavaScript(`(async () => {
         if (document.body.classList.contains('booting')) throw Error('Boot failed');
         if (typeof require !== 'undefined') throw Error('Renderer Node integration enabled');

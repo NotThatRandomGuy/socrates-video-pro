@@ -94,7 +94,7 @@ function register({app,ipcMain,dialog,shell,getWindow}) {
           }}finally{await handle.close();}
           if(size!==asset.size || digest.digest('hex')!==hash)throw Error('The downloaded update did not pass verification');
           if(kind==='setup' || kind==='portable') {
-            const result=await promisify(execFile)('powershell.exe',['-NoProfile','-NonInteractive','-File',path.join(__dirname,'verify-update.ps1'),'-FilePath',temporary],{windowsHide:true,timeout:30000});
+            const result=await promisify(execFile)('powershell.exe',['-NoProfile','-NonInteractive','-File',(app.isPackaged ? path.join(process.resourcesPath,'app.asar.unpacked','desktop','verify-update.ps1') : path.join(__dirname,'verify-update.ps1')),'-FilePath',temporary],{windowsHide:true,timeout:30000});
             const cert=new X509Certificate(fs.readFileSync(path.join(__dirname,'..','signing','release-signing.cer')));
             if(result.stdout.trim()!==cert.fingerprint.replaceAll(':',''))throw Error('The Windows update has an unexpected signer');
           }
