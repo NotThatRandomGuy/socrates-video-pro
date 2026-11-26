@@ -9,7 +9,7 @@ const {register,kindFor,verifyManifest}=require('../desktop/updates.cjs');
 assert(Core.newer('1.2.10','1.2.5'));assert(!Core.newer('1.2.5','1.2.10'));
 assert(!Core.parts('1.2.11-beta'));assert(!Core.parts('1.02.10'));
 for(const [os,arch,env,expected] of [['win32','x64',{},'setup'],['win32','x64',{PORTABLE_EXECUTABLE_DIR:'x'},'portable'],['linux','x64',{},'deb'],['linux','x64',{APPIMAGE:'x'},'appimage'],['darwin','arm64',{},'arm64'],['darwin','x64',{},'x64'],['linux','arm64',{},null]])assert.equal(kindFor(os,arch,env),expected);
-const manifest=fs.readFileSync('tests/fixtures/1.2.5-SHA256SUMS.txt'),signature=fs.readFileSync('dist/release/1.2.5/SHA256SUMS.txt.sig'),cert=fs.readFileSync('signing/release-signing.cer');
+const manifest=fs.readFileSync('tests/fixtures/1.2.5-SHA256SUMS.txt'),signature=fs.readFileSync('tests/fixtures/1.2.5-SHA256SUMS.txt.sig'),cert=fs.readFileSync('signing/release-signing.cer');
 assert(verifyManifest(manifest,signature,cert).has('Socrates-Video-Pro-1.2.5-Setup-x64.exe'));
 assert.throws(()=>verifyManifest(Buffer.concat([manifest,Buffer.from('tampered')]),signature,cert));
 // Native handlers must reject foreign frames and cancelled downloads before asset access.
