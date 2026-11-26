@@ -59,6 +59,13 @@ await check('untrusted and preview releases are rejected',`(()=>{
   try{UpdateCore.release(data);return false;}catch{}
  }return true;
 })()`);
+await check('web reload waits for a recovery checkpoint and preserves work when storage fails',`(async()=>{
+ const request=fetch,confirm=UI.confirm,set=DB.set,project=state.project;
+ state.dirty=false;let checkpoint=false;
+ window.fetch=async()=>({ok:true,text:async()=>"const APP_VERSION = '9.0.0';"});
+ UI.confirm=async()=>true;DB.set=async()=>{checkpoint=true;return undefined;};
+ try{await Updates.updateNow();return checkpoint&&state.project===project;}finally{window.fetch=request;UI.confirm=confirm;DB.set=set;}
+})()`);
 console.log('Updater verification and preferences passed.');
 for(const [name,result]of results)console.log(result+': '+name);
 console.log('Console errors:',errors.length?errors:'(none)');

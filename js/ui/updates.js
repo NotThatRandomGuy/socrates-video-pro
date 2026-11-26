@@ -77,8 +77,13 @@ const Updates = (() => {
         if(response.ok && UpdateCore.newer(version,APP_VERSION)) {
           if(state.dirty && !Project.save())return;
           const ok=await UI.confirm('Reload when you are ready','A newer editor is available on this site. Please keep the saved project file. Would you like to reload now?','Reload editor');
-          if(ok && !state.exporting && !state.playing && !state.dirty)location.reload();
-          else if(ok)UI.toast('Please save any new edits and finish playback or export before reloading.');
+          if(ok) {
+            if(state.exporting || state.playing || state.dirty || Recorder.recording)return UI.toast('Please save any new edits and finish playback, recording, or export before reloading.');
+            const snapshot=ProjectValidation.validate(Project.serialize());
+            if(await DB.set('autosave',snapshot)!=='autosave')return UI.toast('We could not save a recovery checkpoint. Please keep your downloaded project and continue editing until you are ready to reopen it.');
+            if(state.exporting || state.playing || state.dirty || Recorder.recording)return UI.toast('Your edit changed while preparing the update. Please save it before trying again.');
+            location.reload();
+          }
           return;
         }
       }catch{}
