@@ -8,4 +8,6 @@ for (const dir of ['js', 'desktop', 'scripts', 'tests']) {
     if (result.status) process.exit(result.status);
   }
 }
+const version=JSON.parse(fs.readFileSync('package.json','utf8')).version;
+if(!fs.readFileSync('js/core/version.js','utf8').includes("'" + version + "'")) throw Error('Desktop and web versions must match');
 console.log('All JavaScript syntax checks passed.');

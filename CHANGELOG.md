@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.10 — 2026-11-26
+
+### Major Updates
+
+- Added a user-controlled updater. The editor checks GitHub for the latest stable release in the background and displays a quiet update button. Checking works independently of startup, editing, and export.
+- Update Now starts a download only after you choose where to save it. Desktop downloads are selected for your edition and processor, checked against the signed release list, and verified before installation or replacement guidance is offered.
+- Added Remind Me Later, Skip This Update, and a persistent option to disable background checks. Help includes manual checks and update settings so you can change your mind at any time.
+
+### Minor Updates
+
+- Added friendly update messages, release notes, reminder choices, download cancellation, and platform-specific instructions for installers, portable apps, AppImage, Debian packages, and Mac disk images.
+- The hosted web editor can offer a reload after saving when a newer version has been deployed to that site. Downloaded web editions link to the new archive with instructions for reopening saved projects.
+- Added historical project fixtures from all four earlier releases, update preference checks, offline checks, signature rejection, and edition-selection checks.
+
+### Bug Fixes
+
+- Version 1.0.0 projects containing the older list of LUT names can open again. Their lookup references are preserved. Available lookup contents are retained, and missing .cube files are identified for reimport.
+- Extra project, view, and media metadata survive opening and saving instead of being silently dropped.
+- Opening a file checks its contents before asking to replace unsaved work. Changes made while the file is being read are included in that confirmation.
+- Undo and redo refresh the displayed playhead time after restoring the timeline.
+- Update failures leave the editor usable offline. Drafts, preview versions, unexpected download addresses, invalid signatures, damaged files, and unexpected Windows signers are rejected.
+- Update downloads use temporary files and clean up cancelled or failed transfers. Opening an installer waits for saved work and idle playback, recording, and export. The editor stays open until you choose to close it.
+
 ## 1.2.5 — 2026-11-25
 
 ### Major Updates

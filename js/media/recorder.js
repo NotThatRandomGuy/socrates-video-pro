@@ -71,5 +71,5 @@ const Recorder = (() => {
   }
   async function webcam() { try { return await record(await navigator.mediaDevices.getUserMedia({ video: { width: 1920, height: 1080 }, audio: true }), { name: 'Webcam recording', kind: 'video', live: true }); } catch { UI.toast('Camera unavailable'); } }
   async function voice() { try { return await record(await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }), { name: 'Voice-over', kind: 'audio' }); } catch { UI.toast('Microphone unavailable'); } }
-  return { screen, webcam, voice, record, mixAudio };
+  return { screen, webcam, voice, record, mixAudio, get recording() { return recording; } };
 })();

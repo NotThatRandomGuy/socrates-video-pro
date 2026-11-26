@@ -1,0 +1,820 @@
+{
+  "app": "VideoEditorPro",
+  "version": 2,
+  "project": {
+    "version": 2,
+    "name": "Archive v1.0.0",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "background": "#000000",
+    "tracks": [
+      {
+        "id": "t_3",
+        "kind": "video",
+        "name": "V1",
+        "clips": [
+          {
+            "id": "c_5",
+            "kind": "video",
+            "mediaId": "source_video",
+            "name": "Original video",
+            "label": "none",
+            "start": 1,
+            "duration": 4,
+            "offset": 0,
+            "sourceDuration": 5,
+            "speed": 1,
+            "enabled": true,
+            "linkId": null,
+            "fit": "contain",
+            "transform": {
+              "x": 123,
+              "y": 0,
+              "scaleX": 1,
+              "scaleY": 1,
+              "rotation": 17,
+              "anchorX": 0,
+              "anchorY": 0,
+              "opacity": 1,
+              "uniform": true
+            },
+            "crop": {
+              "l": 0,
+              "t": 0,
+              "r": 0,
+              "b": 0
+            },
+            "cornerRadius": 0,
+            "blend": "normal",
+            "effects": [
+              {
+                "id": "fx_6",
+                "type": "blur",
+                "enabled": true,
+                "params": {
+                  "radius": 8
+                },
+                "lut": null
+              }
+            ],
+            "keyframes": {
+              "transform.x": [
+                {
+                  "t": 0,
+                  "v": 123,
+                  "ease": "ease-in"
+                },
+                {
+                  "t": 3,
+                  "v": 456,
+                  "ease": "linear"
+                }
+              ]
+            },
+            "transitionIn": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "transitionOut": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "audio": {
+              "volume": 1,
+              "pan": 0,
+              "muted": false,
+              "fadeIn": 0,
+              "fadeOut": 0,
+              "eqLow": 0,
+              "eqMid": 0,
+              "eqHigh": 0,
+              "highpass": 0,
+              "lowpass": 20000,
+              "normalize": 1,
+              "pitch": 0
+            },
+            "motion": {
+              "preset": "none"
+            }
+          },
+          {
+            "id": "c_9",
+            "kind": "image",
+            "mediaId": "source_image",
+            "name": "Original image",
+            "label": "none",
+            "start": 1,
+            "duration": 4,
+            "offset": 0,
+            "sourceDuration": 5,
+            "speed": 1,
+            "enabled": true,
+            "linkId": null,
+            "fit": "contain",
+            "transform": {
+              "x": 123,
+              "y": 0,
+              "scaleX": 1,
+              "scaleY": 1,
+              "rotation": 17,
+              "anchorX": 0,
+              "anchorY": 0,
+              "opacity": 1,
+              "uniform": true
+            },
+            "crop": {
+              "l": 0,
+              "t": 0,
+              "r": 0,
+              "b": 0
+            },
+            "cornerRadius": 0,
+            "blend": "normal",
+            "effects": [
+              {
+                "id": "fx_10",
+                "type": "blur",
+                "enabled": true,
+                "params": {
+                  "radius": 8
+                },
+                "lut": null
+              }
+            ],
+            "keyframes": {
+              "transform.x": [
+                {
+                  "t": 0,
+                  "v": 123,
+                  "ease": "ease-in"
+                },
+                {
+                  "t": 3,
+                  "v": 456,
+                  "ease": "linear"
+                }
+              ]
+            },
+            "transitionIn": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "transitionOut": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "audio": {
+              "volume": 1,
+              "pan": 0,
+              "muted": false,
+              "fadeIn": 0,
+              "fadeOut": 0,
+              "eqLow": 0,
+              "eqMid": 0,
+              "eqHigh": 0,
+              "highpass": 0,
+              "lowpass": 20000,
+              "normalize": 1,
+              "pitch": 0
+            },
+            "motion": {
+              "preset": "none"
+            }
+          },
+          {
+            "id": "c_11",
+            "kind": "text",
+            "mediaId": null,
+            "name": "Original text",
+            "label": "none",
+            "start": 1,
+            "duration": 4,
+            "offset": 0,
+            "sourceDuration": 5,
+            "speed": 1,
+            "enabled": true,
+            "linkId": null,
+            "fit": "contain",
+            "transform": {
+              "x": 123,
+              "y": 0,
+              "scaleX": 1,
+              "scaleY": 1,
+              "rotation": 17,
+              "anchorX": 0,
+              "anchorY": 0,
+              "opacity": 1,
+              "uniform": true
+            },
+            "crop": {
+              "l": 0,
+              "t": 0,
+              "r": 0,
+              "b": 0
+            },
+            "cornerRadius": 0,
+            "blend": "normal",
+            "effects": [
+              {
+                "id": "fx_12",
+                "type": "blur",
+                "enabled": true,
+                "params": {
+                  "radius": 8
+                },
+                "lut": null
+              }
+            ],
+            "keyframes": {
+              "transform.x": [
+                {
+                  "t": 0,
+                  "v": 123,
+                  "ease": "ease-in"
+                },
+                {
+                  "t": 3,
+                  "v": 456,
+                  "ease": "linear"
+                }
+              ]
+            },
+            "transitionIn": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "transitionOut": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "audio": {
+              "volume": 1,
+              "pan": 0,
+              "muted": false,
+              "fadeIn": 0,
+              "fadeOut": 0,
+              "eqLow": 0,
+              "eqMid": 0,
+              "eqHigh": 0,
+              "highpass": 0,
+              "lowpass": 20000,
+              "normalize": 1,
+              "pitch": 0
+            },
+            "motion": {
+              "preset": "none"
+            },
+            "text": {
+              "content": "Your Text Here",
+              "font": "Montserrat",
+              "weight": "700",
+              "italic": false,
+              "size": 96,
+              "color": "#ffffff",
+              "align": "center",
+              "vAlign": "middle",
+              "lineHeight": 1.2,
+              "letterSpacing": 0,
+              "transform": "none",
+              "boxWidth": 0,
+              "strokeColor": "#000000",
+              "strokeWidth": 0,
+              "shadowColor": "#000000",
+              "shadowBlur": 0,
+              "shadowX": 4,
+              "shadowY": 4,
+              "shadowOpacity": 0.8,
+              "bgColor": "#000000",
+              "bgOpacity": 0,
+              "bgPadding": 24,
+              "bgRadius": 16,
+              "gradient": false,
+              "color2": "#6c8cff",
+              "gradAngle": 0,
+              "animation": "none",
+              "animDuration": 0.8,
+              "animOut": "none",
+              "animOutDuration": 0.5
+            }
+          },
+          {
+            "id": "c_13",
+            "kind": "shape",
+            "mediaId": null,
+            "name": "Original shape",
+            "label": "none",
+            "start": 1,
+            "duration": 4,
+            "offset": 0,
+            "sourceDuration": 5,
+            "speed": 1,
+            "enabled": true,
+            "linkId": null,
+            "fit": "contain",
+            "transform": {
+              "x": 123,
+              "y": 0,
+              "scaleX": 1,
+              "scaleY": 1,
+              "rotation": 17,
+              "anchorX": 0,
+              "anchorY": 0,
+              "opacity": 1,
+              "uniform": true
+            },
+            "crop": {
+              "l": 0,
+              "t": 0,
+              "r": 0,
+              "b": 0
+            },
+            "cornerRadius": 0,
+            "blend": "normal",
+            "effects": [
+              {
+                "id": "fx_14",
+                "type": "blur",
+                "enabled": true,
+                "params": {
+                  "radius": 8
+                },
+                "lut": null
+              }
+            ],
+            "keyframes": {
+              "transform.x": [
+                {
+                  "t": 0,
+                  "v": 123,
+                  "ease": "ease-in"
+                },
+                {
+                  "t": 3,
+                  "v": 456,
+                  "ease": "linear"
+                }
+              ]
+            },
+            "transitionIn": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "transitionOut": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "audio": {
+              "volume": 1,
+              "pan": 0,
+              "muted": false,
+              "fadeIn": 0,
+              "fadeOut": 0,
+              "eqLow": 0,
+              "eqMid": 0,
+              "eqHigh": 0,
+              "highpass": 0,
+              "lowpass": 20000,
+              "normalize": 1,
+              "pitch": 0
+            },
+            "motion": {
+              "preset": "none"
+            },
+            "shape": {
+              "type": "rect",
+              "fill": "#6c8cff",
+              "stroke": "#ffffff",
+              "strokeWidth": 0,
+              "width": 600,
+              "height": 340,
+              "radius": 24,
+              "gradient": false,
+              "fill2": "#b58cff",
+              "gradAngle": 45,
+              "points": 5
+            }
+          },
+          {
+            "id": "c_15",
+            "kind": "sticker",
+            "mediaId": null,
+            "name": "Original sticker",
+            "label": "none",
+            "start": 1,
+            "duration": 4,
+            "offset": 0,
+            "sourceDuration": 5,
+            "speed": 1,
+            "enabled": true,
+            "linkId": null,
+            "fit": "contain",
+            "transform": {
+              "x": 123,
+              "y": 0,
+              "scaleX": 1,
+              "scaleY": 1,
+              "rotation": 17,
+              "anchorX": 0,
+              "anchorY": 0,
+              "opacity": 1,
+              "uniform": true
+            },
+            "crop": {
+              "l": 0,
+              "t": 0,
+              "r": 0,
+              "b": 0
+            },
+            "cornerRadius": 0,
+            "blend": "normal",
+            "effects": [
+              {
+                "id": "fx_16",
+                "type": "blur",
+                "enabled": true,
+                "params": {
+                  "radius": 8
+                },
+                "lut": null
+              }
+            ],
+            "keyframes": {
+              "transform.x": [
+                {
+                  "t": 0,
+                  "v": 123,
+                  "ease": "ease-in"
+                },
+                {
+                  "t": 3,
+                  "v": 456,
+                  "ease": "linear"
+                }
+              ]
+            },
+            "transitionIn": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "transitionOut": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "audio": {
+              "volume": 1,
+              "pan": 0,
+              "muted": false,
+              "fadeIn": 0,
+              "fadeOut": 0,
+              "eqLow": 0,
+              "eqMid": 0,
+              "eqHigh": 0,
+              "highpass": 0,
+              "lowpass": 20000,
+              "normalize": 1,
+              "pitch": 0
+            },
+            "motion": {
+              "preset": "none"
+            },
+            "sticker": {
+              "id": "star",
+              "color": "#ffcf4a",
+              "text": ""
+            }
+          },
+          {
+            "id": "c_17",
+            "kind": "solid",
+            "mediaId": null,
+            "name": "Original solid",
+            "label": "none",
+            "start": 1,
+            "duration": 4,
+            "offset": 0,
+            "sourceDuration": 5,
+            "speed": 1,
+            "enabled": true,
+            "linkId": null,
+            "fit": "contain",
+            "transform": {
+              "x": 123,
+              "y": 0,
+              "scaleX": 1,
+              "scaleY": 1,
+              "rotation": 17,
+              "anchorX": 0,
+              "anchorY": 0,
+              "opacity": 1,
+              "uniform": true
+            },
+            "crop": {
+              "l": 0,
+              "t": 0,
+              "r": 0,
+              "b": 0
+            },
+            "cornerRadius": 0,
+            "blend": "normal",
+            "effects": [
+              {
+                "id": "fx_18",
+                "type": "blur",
+                "enabled": true,
+                "params": {
+                  "radius": 8
+                },
+                "lut": null
+              }
+            ],
+            "keyframes": {
+              "transform.x": [
+                {
+                  "t": 0,
+                  "v": 123,
+                  "ease": "ease-in"
+                },
+                {
+                  "t": 3,
+                  "v": 456,
+                  "ease": "linear"
+                }
+              ]
+            },
+            "transitionIn": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "transitionOut": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "audio": {
+              "volume": 1,
+              "pan": 0,
+              "muted": false,
+              "fadeIn": 0,
+              "fadeOut": 0,
+              "eqLow": 0,
+              "eqMid": 0,
+              "eqHigh": 0,
+              "highpass": 0,
+              "lowpass": 20000,
+              "normalize": 1,
+              "pitch": 0
+            },
+            "motion": {
+              "preset": "none"
+            },
+            "solid": {
+              "color": "#1d1640",
+              "gradient": false,
+              "color2": "#6c8cff",
+              "angle": 45
+            }
+          },
+          {
+            "id": "c_19",
+            "kind": "adjustment",
+            "mediaId": null,
+            "name": "Original adjustment",
+            "label": "none",
+            "start": 1,
+            "duration": 4,
+            "offset": 0,
+            "sourceDuration": 5,
+            "speed": 1,
+            "enabled": true,
+            "linkId": null,
+            "fit": "contain",
+            "transform": {
+              "x": 123,
+              "y": 0,
+              "scaleX": 1,
+              "scaleY": 1,
+              "rotation": 17,
+              "anchorX": 0,
+              "anchorY": 0,
+              "opacity": 1,
+              "uniform": true
+            },
+            "crop": {
+              "l": 0,
+              "t": 0,
+              "r": 0,
+              "b": 0
+            },
+            "cornerRadius": 0,
+            "blend": "normal",
+            "effects": [
+              {
+                "id": "fx_20",
+                "type": "blur",
+                "enabled": true,
+                "params": {
+                  "radius": 8
+                },
+                "lut": null
+              }
+            ],
+            "keyframes": {
+              "transform.x": [
+                {
+                  "t": 0,
+                  "v": 123,
+                  "ease": "ease-in"
+                },
+                {
+                  "t": 3,
+                  "v": 456,
+                  "ease": "linear"
+                }
+              ]
+            },
+            "transitionIn": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "transitionOut": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "audio": {
+              "volume": 1,
+              "pan": 0,
+              "muted": false,
+              "fadeIn": 0,
+              "fadeOut": 0,
+              "eqLow": 0,
+              "eqMid": 0,
+              "eqHigh": 0,
+              "highpass": 0,
+              "lowpass": 20000,
+              "normalize": 1,
+              "pitch": 0
+            },
+            "motion": {
+              "preset": "none"
+            }
+          }
+        ],
+        "muted": false,
+        "solo": false,
+        "locked": false,
+        "hidden": false,
+        "volume": 1,
+        "pan": 0,
+        "height": 64,
+        "color": null
+      },
+      {
+        "id": "t_4",
+        "kind": "audio",
+        "name": "A1",
+        "clips": [
+          {
+            "id": "c_7",
+            "kind": "audio",
+            "mediaId": "source_audio",
+            "name": "Original audio",
+            "label": "none",
+            "start": 1,
+            "duration": 4,
+            "offset": 0,
+            "sourceDuration": 5,
+            "speed": 1,
+            "enabled": true,
+            "linkId": null,
+            "fit": "contain",
+            "transform": {
+              "x": 123,
+              "y": 0,
+              "scaleX": 1,
+              "scaleY": 1,
+              "rotation": 17,
+              "anchorX": 0,
+              "anchorY": 0,
+              "opacity": 1,
+              "uniform": true
+            },
+            "crop": {
+              "l": 0,
+              "t": 0,
+              "r": 0,
+              "b": 0
+            },
+            "cornerRadius": 0,
+            "blend": "normal",
+            "effects": [
+              {
+                "id": "fx_8",
+                "type": "blur",
+                "enabled": true,
+                "params": {
+                  "radius": 8
+                },
+                "lut": null
+              }
+            ],
+            "keyframes": {
+              "transform.x": [
+                {
+                  "t": 0,
+                  "v": 123,
+                  "ease": "ease-in"
+                },
+                {
+                  "t": 3,
+                  "v": 456,
+                  "ease": "linear"
+                }
+              ]
+            },
+            "transitionIn": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "transitionOut": {
+              "type": "none",
+              "duration": 0.5
+            },
+            "audio": {
+              "volume": 1,
+              "pan": 0,
+              "muted": false,
+              "fadeIn": 0,
+              "fadeOut": 0,
+              "eqLow": 0,
+              "eqMid": 0,
+              "eqHigh": 0,
+              "highpass": 0,
+              "lowpass": 20000,
+              "normalize": 1,
+              "pitch": 0
+            },
+            "motion": {
+              "preset": "none"
+            }
+          }
+        ],
+        "muted": false,
+        "solo": false,
+        "locked": false,
+        "hidden": false,
+        "volume": 1,
+        "pan": 0,
+        "height": 64,
+        "color": null
+      }
+    ],
+    "markers": [
+      {
+        "id": "mk_21",
+        "time": 2,
+        "name": "Original marker",
+        "color": "blue",
+        "duration": 0
+      }
+    ],
+    "inPoint": 1,
+    "outPoint": 4,
+    "createdAt": 1795731692238
+  },
+  "media": [
+    {
+      "id": "source_video",
+      "type": "video",
+      "name": "Original video",
+      "duration": 5,
+      "tags": [
+        "archive"
+      ]
+    },
+    {
+      "id": "source_audio",
+      "type": "audio",
+      "name": "Original audio",
+      "duration": 5,
+      "tags": [
+        "archive"
+      ]
+    },
+    {
+      "id": "source_image",
+      "type": "image",
+      "name": "Original image",
+      "duration": 5,
+      "tags": [
+        "archive"
+      ]
+    }
+  ],
+  "view": {
+    "pxPerSec": 77,
+    "currentTime": 2
+  },
+  "luts": [
+    "old-look.cube"
+  ]
+}

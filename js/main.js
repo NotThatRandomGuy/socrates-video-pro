@@ -112,6 +112,7 @@
   Preview.layout(); Player.requestRender(); UI.refreshToolbar();
   await Startup.init(restored);
   document.body.classList.remove('booting');
+  Updates.init().catch(() => {});
   // unlock audio on first interaction
   const unlock = () => { AudioEngine.resume(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); }; window.addEventListener('pointerdown', unlock); window.addEventListener('keydown', unlock);
   Events.on('media:changed', () => Player.requestRender());

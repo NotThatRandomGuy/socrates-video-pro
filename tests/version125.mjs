@@ -42,7 +42,7 @@ await check('BOM project files open and legacy defaults migrate', `(async()=>{
 await check('malformed and future projects preserve current edit and undo', `(async()=>{
   Cmd.addGenerated('text');const before=JSON.stringify(state.project);
   for(const damage of [
-    d=>d.version=99,d=>d.luts=[],d=>d.mix={volume:3,muted:false},
+    d=>d.version=99,d=>d.luts=[42],d=>d.mix={volume:3,muted:false},
     d=>d.project.tracks[0].clips[0].keyframes=null,
     d=>d.project.tracks[0].clips[0].transitionIn.duration=-2,
     d=>d.project.tracks[0].clips.push(null)

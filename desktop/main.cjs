@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, Menu, session, dialog, desktopCapturer } = require('electron');
+const { app, BrowserWindow, Menu, session, dialog, desktopCapturer, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
@@ -37,7 +37,7 @@ function editMenuItem(label, accelerator, key, nativeAction) {
 }
 async function createWindow() {
   const entry = pathToFileURL(path.join(__dirname, '..', 'index.html')).href;
-  win = new BrowserWindow({ width: 1600, height: 1000, minWidth: 1000, minHeight: 700, show: !smoke, backgroundColor: '#10131b', icon: path.join(__dirname, '..', 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'), webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true } });
+  win = new BrowserWindow({ width: 1600, height: 1000, minWidth: 1000, minHeight: 700, show: !smoke, backgroundColor: '#10131b', icon: path.join(__dirname, '..', 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'), webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, preload: path.join(__dirname,'preload.cjs') } });
   win.on('closed', () => { win = null; });
   if (isMac) {
     // Leave Command-M available for the editor's Export command.
@@ -81,6 +81,10 @@ async function createWindow() {
         if (document.body.classList.contains('booting')) throw Error('Boot failed');
         if (typeof require !== 'undefined') throw Error('Renderer Node integration enabled');
         if (!document.querySelector('.welcome') || !document.querySelector('.welcome-tutorial')) throw Error('Welcome screen missing');
+        if (!window.desktopUpdates || typeof require !== 'undefined') throw Error('Update bridge or sandbox failed');
+        const updateInfo=await window.desktopUpdates.info();
+        if(updateInfo.version!==APP_VERSION) throw Error('Updater version mismatch');
+        await window.desktopUpdates.preferences({enabled:false,skipped:[],remindUntil:0});
         Startup.close();
         Cmd.addGenerated('shape'); Cmd.cropCanvas({x:100,y:100,width:1000,height:800}); Cmd.centerClip();
         const cv=document.createElement('canvas');cv.width=1000;cv.height=800;Compositor.renderFrame(cv.getContext('2d'),0);
@@ -105,7 +109,10 @@ async function createWindow() {
     } catch (e) { console.error(e); app.exit(1); }
   }
 }
-app.whenReady().then(createWindow).catch(error => { console.error(error); app.exit(1); });
+app.whenReady().then(() => {
+  require('./updates.cjs').register({app,ipcMain,dialog,shell,getWindow:()=>win});
+  return createWindow();
+}).catch(error => { console.error(error); app.exit(1); });
 app.on('activate', () => {
   if (app.isReady() && !win) createWindow().catch(error => { console.error(error); app.exit(1); });
 });

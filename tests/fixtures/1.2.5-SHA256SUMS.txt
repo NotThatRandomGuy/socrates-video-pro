@@ -1,0 +1,9 @@
+ca56522c3685ee88e1f572251e4aae038293ab681bbbcef3af8d49f7c6ed92b0  Socrates-Video-Pro-1.2.5-Linux-amd64.deb
+be1e5818d2dc0e8793713d116a194cf68dc3f85a7d60201d6e10ee4a385c3d8c  Socrates-Video-Pro-1.2.5-Linux-x86_64.AppImage
+fde5d2a511ad14de629eaeccf7cfe4d6deb97af61081fea317bd2415e0c05de4  Socrates-Video-Pro-1.2.5-Portable-x64.exe
+1d7609ae3faae69786cbb3dbb77ebbcb20f6da72d4cc5fdd67a19f7f75d17bbc  Socrates-Video-Pro-1.2.5-Setup-x64.exe
+7353b4c5cf58c0562fec36aee491353214109ad7c3ae93189eb43cc56139a5d5  Socrates-Video-Pro-1.2.5-macOS-arm64.dmg
+6bf7516a215403c0b1f3d273d13b0526923f5e1b381988fa1e31276c73bcf9b2  Socrates-Video-Pro-1.2.5-macOS-x64.dmg
+b27248e647713378e3c5c5bd3a7b16192b13c106e6bc91b628e88c029b3e24b3  Socrates-Video-Pro-Web.zip
+983066ddbf838450ab033dc90fe5b2f8455b38b37fc34bbfd00110eb55872b49  release-public-key.pem
+44c3f80f4542fdaa66c5d0d990b140f1ab7532bdca993043294e7e8dd314fcc3  release-signing.cer

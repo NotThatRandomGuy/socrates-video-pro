@@ -175,7 +175,7 @@ const History = (() => {
     Player.pause(); AudioEngine.resetMedia();
     state.project = JSON.parse(s.project); state.selection = new Set(s.sel.filter(id => findClip(id)));
     if (s.media) Media.restoreEntry(s.media);
-    recalcDuration(); Media.gcClipEls();
+    recalcDuration(); Media.gcClipEls(); Events.emit('time:changed');
     Events.emit('project:resized'); Events.emit('project:changed'); Events.emit('selection:changed');
   };
   return {

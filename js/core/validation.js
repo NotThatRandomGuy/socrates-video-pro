@@ -16,9 +16,15 @@ const ProjectValidation = (() => {
     if (!data || !data.project || typeof data.project !== 'object' || Array.isArray(data.project)) throw Error('Not a valid project file');
     if (data.app && data.app !== 'VideoEditorPro') throw Error('This file belongs to another application');
     if (data.version !== undefined && (!Number.isInteger(data.version) || data.version < 1 || data.version > 2)) throw Error('Unsupported project format version');
-    if (data.luts !== undefined && (!data.luts || Array.isArray(data.luts) || typeof data.luts !== 'object' || Object.values(data.luts).some(v => typeof v !== 'string'))) throw Error('Invalid color lookup tables');
+    if (data.luts !== undefined && (!data.luts || (Array.isArray(data.luts) && data.luts.some(v=>typeof v !== 'string')) || typeof data.luts !== 'object' || Object.values(data.luts).some(v => typeof v !== 'string'))) throw Error('Invalid color lookup tables');
     if (data.mix !== undefined && (!data.mix || typeof data.mix.volume !== 'number' || data.mix.volume < 0 || data.mix.volume > 1.5 || typeof data.mix.muted !== 'boolean')) throw Error('Invalid master mix');
+    if (data.view !== undefined && (!data.view || typeof data.view !== 'object' || Array.isArray(data.view))) throw Error('Invalid project view');
+    if(data.legacyLUTNames !== undefined && (!Array.isArray(data.legacyLUTNames) || data.legacyLUTNames.some(n=>typeof n!=='string'))) throw Error('Invalid legacy LUT references');
     const copy = U.deepClone(data), p = copy.project;
+    if (Array.isArray(copy.luts)) {
+      copy.legacyLUTNames=[...new Set([...(copy.legacyLUTNames || []),...copy.luts])];
+      copy.luts={};
+    }
     if (p.tracks !== undefined && !Array.isArray(p.tracks)) throw Error('Invalid project tracks');
     for (const t of p.tracks || []) if (!t || !['video','audio'].includes(t.kind) || !Array.isArray(t.clips)) throw Error('Invalid track');
     for (const t of p.tracks || []) for (const c of t.clips) if (!c || typeof c !== 'object' || Array.isArray(c)) throw Error('Invalid clip');

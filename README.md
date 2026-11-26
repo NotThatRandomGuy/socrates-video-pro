@@ -1,6 +1,6 @@
 # Socrates Video Pro
 
-A local, multitrack video editor for the web, Windows, Linux, and macOS. Edit, animate, mix, and export on your own machine. The browser app has no runtime dependencies or build step; the desktop apps bundle Chromium with Electron. See the [1.2.5 changelog](CHANGELOG.md).
+A local, multitrack video editor for the web, Windows, Linux, and macOS. Edit, animate, mix, and export on your own machine. The browser app has no runtime dependencies or build step; the desktop apps bundle Chromium with Electron. See the [1.2.10 changelog](CHANGELOG.md).
 
 ![Socrates Video Pro workspace](tests/screenshot.png)
 
@@ -10,12 +10,12 @@ Download the latest files from [Releases](https://github.com/NotThatRandomGuy/so
 
 | Download | How to use it |
 | --- | --- |
-| `Socrates-Video-Pro-1.2.5-Setup-x64.exe` | Windows 10/11, 64-bit. Run the installer, choose a folder, and launch from Start or the desktop shortcut. Uninstall through Windows Settings. |
-| `Socrates-Video-Pro-1.2.5-Portable-x64.exe` | Place in a writable folder and run. No installation is required. Recovery and media cache live in the adjacent `SocratesVideoPro-data` folder; keep that folder with the executable when moving it. |
-| `Socrates-Video-Pro-1.2.5-Linux-x86_64.AppImage` | Linux x86-64, Ubuntu 22.04 or compatible. Make executable and launch; instructions below. |
-| `Socrates-Video-Pro-1.2.5-Linux-amd64.deb` | Debian/Ubuntu x86-64. Install with the system package manager; instructions below. |
-| `Socrates-Video-Pro-1.2.5-macOS-arm64.dmg` | macOS 13 or later on Apple silicon (M-series). Open the disk image and drag the app to Applications. |
-| `Socrates-Video-Pro-1.2.5-macOS-x64.dmg` | macOS 13 or later on an Intel Mac. Open the disk image and drag the app to Applications. |
+| `Socrates-Video-Pro-1.2.10-Setup-x64.exe` | Windows 10/11, 64-bit. Run the installer, choose a folder, and launch from Start or the desktop shortcut. Uninstall through Windows Settings. |
+| `Socrates-Video-Pro-1.2.10-Portable-x64.exe` | Place in a writable folder and run. No installation is required. Recovery and media cache live in the adjacent `SocratesVideoPro-data` folder; keep that folder with the executable when moving it. |
+| `Socrates-Video-Pro-1.2.10-Linux-x86_64.AppImage` | Linux x86-64, Ubuntu 22.04 or compatible. Make executable and launch; instructions below. |
+| `Socrates-Video-Pro-1.2.10-Linux-amd64.deb` | Debian/Ubuntu x86-64. Install with the system package manager; instructions below. |
+| `Socrates-Video-Pro-1.2.10-macOS-arm64.dmg` | macOS 13 or later on Apple silicon (M-series). Open the disk image and drag the app to Applications. |
+| `Socrates-Video-Pro-1.2.10-macOS-x64.dmg` | macOS 13 or later on an Intel Mac. Open the disk image and drag the app to Applications. |
 | `Socrates-Video-Pro-Web.zip` | Extract and open `index.html` in current Chrome or Edge. You can also serve the extracted files from any static web host. |
 
 Windows executables are signed locally with a **self-signed** certificate attributed to NotThatRandomGuy. Windows can still show an unknown-publisher warning. The public certificate is included; its non-exportable private key stays on the signing machine. All release downloads are covered by a locally signed checksum list, including the Mac disk images, Linux packages, and web ZIP. See verification below.
@@ -35,21 +35,21 @@ Allow camera, microphone, or screen recording in **Privacy & Security** when pro
 For AppImage:
 
 ```sh
-chmod +x Socrates-Video-Pro-1.2.5-Linux-x86_64.AppImage
-./Socrates-Video-Pro-1.2.5-Linux-x86_64.AppImage
+chmod +x Socrates-Video-Pro-1.2.10-Linux-x86_64.AppImage
+./Socrates-Video-Pro-1.2.10-Linux-x86_64.AppImage
 ```
 
 If your distribution lacks AppImage's FUSE support, extract and run instead:
 
 ```sh
-./Socrates-Video-Pro-1.2.5-Linux-x86_64.AppImage --appimage-extract
+./Socrates-Video-Pro-1.2.10-Linux-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
 For Debian/Ubuntu:
 
 ```sh
-sudo apt install ./Socrates-Video-Pro-1.2.5-Linux-amd64.deb
+sudo apt install ./Socrates-Video-Pro-1.2.10-Linux-amd64.deb
 socrates-video-pro
 # To uninstall:
 sudo apt remove socrates-video-pro
@@ -58,6 +58,24 @@ sudo apt remove socrates-video-pro
 Linux keeps recovery and media cache in your user configuration directory (normally `~/.config/Socrates Video Pro`). Launch as your normal user. The AppImage requires working unprivileged user namespaces; if your distribution restricts them, use the Debian package with its installed sandbox helper. The app keeps Chromium's sandbox enabled. Wayland screen capture needs a working PipeWire desktop portal. Linux screen recording supports video and microphone capture; system-audio loopback is not provided by this desktop integration. Camera, microphone, codecs, and GPU support depend on your distribution and hardware.
 
 To run the source in a browser, download or clone this repository and open `index.html`. Alternatively, with Node.js 24 installed, run `node scripts/serve.mjs` and open [localhost:8765](http://localhost:8765). Recording requires a secure context: HTTPS, localhost, or the desktop app. Support for file-based recording depends on your browser.
+
+## Optional updates
+
+The editor checks the [latest stable GitHub release](https://github.com/NotThatRandomGuy/socrates-video-pro/releases/latest) in the background after startup. A quiet **Update available** button lets you choose when to read the news. Connection failures leave editing available. Background checks fetch release information only.
+
+**Update Now** lets desktop users choose a download location. The updater verifies the package against the release checksum list and its signature using the public certificate bundled with the app. Windows downloads also have their embedded signature checked. Installation is a separate choice. Save your work and finish playback, recording, or export before opening the Windows installer. The updater keeps the editor running.
+
+For portable Windows and Linux AppImage, finish editing, close the old application, and replace or launch the verified download yourself. Keep the portable app's adjacent data folder. Debian packages come with package-manager guidance. Mac downloads match Intel or Apple silicon and include disk-image installation guidance. Your existing edition and projects remain available while you decide.
+
+Choose **Remind Me Later** for an hour, a day, or a week. **Skip This Update** suppresses that release. **Don’t notify me about future updates** disables background checks. These preferences survive upgrades in the desktop app's user data folder. Use **Help → Check for updates** manually or **Help → Update settings** to re-enable checks. Closing an update message dismisses that release's notification, and Help can open it again.
+
+Hosted web editions check whether that site has deployed a newer version before offering to reload. Save your project first. For a downloaded web archive, download and extract the new archive separately, then reopen your project there. Web notification preferences are stored in the browser profile.
+
+## Opening older projects
+
+Projects from 1.0.0, 1.1.0, 1.2.0, and 1.2.5 have regression coverage for reopening, saving, and preserving their stored fields. Extra metadata is retained. Invalid files leave the current project and undo history intact.
+
+Version 1.0.0 stored LUT filenames without the contents of the .cube files. The editor keeps those names and identifies missing lookup files. Reimport the original .cube files to restore those looks when their contents are unavailable. Continue to keep original video, audio, and images alongside your project files.
 
 ## Welcome and tutorial
 
@@ -176,6 +194,8 @@ node tests/canvas.mjs     # crop pixels, save/load, undo, snapping, dialogs, cro
 node tests/audit.mjs      # project safety, editing, audio, GPU, recording and export regressions
 node tests/version120.mjs # linked edits, media undo, recovery, fractional rates, audio and MP4 timing
 node tests/version125.mjs # startup, tutorial, downloaded project round trips and damaged files
+node tests/compatibility.mjs # projects generated with each earlier release
+node tests/updates.mjs       # release versions, signatures, preferences, offline checks
 node tests/screenshot.mjs # renders a populated project → tests/screenshot.png
 ```
 
