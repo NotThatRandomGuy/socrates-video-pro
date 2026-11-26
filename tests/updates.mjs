@@ -1,15 +1,43 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import fs from 'node:fs';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
 import {launch} from './harness.mjs';
 const require=createRequire(import.meta.url),Core=require('../js/core/update-core.js');
-const {kindFor,verifyManifest}=require('../desktop/updates.cjs');
+const {register,kindFor,verifyManifest}=require('../desktop/updates.cjs');
 assert(Core.newer('1.2.10','1.2.5'));assert(!Core.newer('1.2.5','1.2.10'));
 assert(!Core.parts('1.2.11-beta'));assert(!Core.parts('1.02.10'));
 for(const [os,arch,env,expected] of [['win32','x64',{},'setup'],['win32','x64',{PORTABLE_EXECUTABLE_DIR:'x'},'portable'],['linux','x64',{},'deb'],['linux','x64',{APPIMAGE:'x'},'appimage'],['darwin','arm64',{},'arm64'],['darwin','x64',{},'x64'],['linux','arm64',{},null]])assert.equal(kindFor(os,arch,env),expected);
 const manifest=fs.readFileSync('tests/fixtures/1.2.5-SHA256SUMS.txt'),signature=fs.readFileSync('dist/release/1.2.5/SHA256SUMS.txt.sig'),cert=fs.readFileSync('signing/release-signing.cer');
 assert(verifyManifest(manifest,signature,cert).has('Socrates-Video-Pro-1.2.5-Setup-x64.exe'));
 assert.throws(()=>verifyManifest(Buffer.concat([manifest,Buffer.from('tampered')]),signature,cert));
+// Native handlers must reject foreign frames and cancelled downloads before asset access.
+const folder=fs.mkdtempSync(path.join(process.cwd(),'tests','.update-test-'));
+const originalFetch=globalThis.fetch;
+try {
+ const handlers={},frame={url:pathToFileURL(path.join(process.cwd(),'index.html')).href};
+ const win={webContents:{mainFrame:frame}},event={sender:win.webContents,senderFrame:frame};
+ let requests=0,installs=0;
+ globalThis.fetch=async()=>{requests++;return new Response(JSON.stringify({
+   tag_name:'v9.0.0',html_url:Core.repo+'/releases/tag/v9.0.0',assets:[{name:Core.assetName('9.0.0',kindFor(process.platform,process.arch,process.env)),state:'uploaded',size:100,
+   browser_download_url:Core.repo+'/releases/download/v9.0.0/'+Core.assetName('9.0.0',kindFor(process.platform,process.arch,process.env))}]
+ }));};
+ win.webContents.executeJavaScript=async()=>false;
+ register({app:{getVersion:()=> '1.0.0',getPath:()=>folder},ipcMain:{handle:(name,fn)=>handlers[name]=fn},getWindow:()=>win,
+ dialog:{showSaveDialog:async()=>({canceled:true})},shell:{openPath:async()=>{installs++;}}});
+ await assert.rejects(handlers['updates:check']({...event,sender:{}}));
+ await handlers['updates:check'](event);
+ assert.equal(requests,1);
+ await handlers['updates:download'](event);
+ assert.equal(requests,1);assert.equal(installs,0);
+ await handlers['updates:preferences'](event,{enabled:false,skipped:['9.0.0']});
+ assert.equal(JSON.parse(fs.readFileSync(path.join(folder,'update-preferences.json'))).enabled,false);
+} finally {
+ globalThis.fetch=originalFetch;
+ if(path.dirname(folder)!==path.join(process.cwd(),'tests') || !path.basename(folder).startsWith('.update-test-'))throw Error('Unexpected test folder');
+ fs.rmSync(folder,{recursive:true,force:true});
+}
 const {check,evalJs,results,errors,done}=await launch();
 await check('offline update checks preserve dirty work and remain usable',`(async()=>{
  const original=fetch,project=state.project;state.dirty=true;window.fetch=async()=>{throw Error('offline');};
