@@ -18,7 +18,8 @@ window.ShortForm=(()=>{
   function message(error){UI.toast(error.message||String(error),6500);}
   function button(label,action){return U.el('button',{onclick:async()=>{
     if(busy)return UI.toast('Please wait for the current analysis, or cancel it.');
-    try{await action();}catch(error){message(error);}
+    busy=true;
+    try{await action();}catch(error){message(error);}finally{busy=false;}
   }},label);}
   function section(title,text,...controls){return U.el('section',{class:'sf-section'},U.el('h3',{},title),U.el('p',{class:'muted'},text),...controls);}
   function number(label,value,min,max,step=1){
@@ -206,7 +207,7 @@ window.ShortForm=(()=>{
     cv.onclick=e=>{if(points.length>=128)return;const r=cv.getBoundingClientRect();points.push([U.clamp((e.clientX-r.left)/r.width,0,1),U.clamp((e.clientY-r.top)/r.height,0,1)]);paint();};
     paint();
     const invert=U.el('input',{type:'checkbox',checked:c.shortForm.invertMask});
-    const ok=await UI.modal('Draw a rotoscoping outline',U.el('div',{},U.el('p',{},'Click around the subject. Add another outline at a later playhead position to animate it. Use the same number and order of points for smooth interpolation.'),cv,button('Undo last point',()=>{points.pop();paint();}),U.el('label',{class:'update-optout'},invert,'Hide the outlined area instead')),[{label:'Cancel'},{label:'Save outline',primary:true}],{width:560});
+    const ok=await UI.modal('Draw a rotoscoping outline',U.el('div',{},U.el('p',{},'Click around the subject. Add another outline at a later playhead position to animate it. Use the same number and order of points for smooth interpolation.'),cv,U.el('button',{onclick:()=>{points.pop();paint();}},'Undo last point'),U.el('label',{class:'update-optout'},invert,'Hide the outlined area instead')),[{label:'Cancel'},{label:'Save outline',primary:true}],{width:560});
     if(!ok||!active(c,project))return;
     if(points.length<3)throw Error('Please draw at least three points');
     if(c.shortForm.maskKeys.length>=1000&&!c.shortForm.maskKeys.some(k=>Math.abs(k.t-time)<.001))throw Error('This clip already has 1000 outlines');
