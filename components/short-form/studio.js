@@ -85,9 +85,8 @@ window.ShortForm=(()=>{
   }
   function beatMarkers(times){
     edit('Beat markers',()=>{
-      for(const time of times)if(!state.project.markers.some(m=>Math.abs(m.time-time)<.02))state.project.markers.push(Model.newMarker(time,'Beat','blue'));
+      for(const time of times)if(!state.project.markers.some(m=>m.name==='Beat'&&Math.abs(m.time-time)<.02))state.project.markers.push(Model.newMarker(time,'Beat','blue'));
       state.project.markers.sort((a,b)=>a.time-b.time);
-      state.project.shortFormBeats=times;
     });
   }
   function energy(buffer,time){
@@ -117,7 +116,7 @@ window.ShortForm=(()=>{
     beatMarkers(beats);UI.toast('Detected '+beats.length+' beat markers. Review them before fitting cuts.');
   }
   function fitBeats(){
-    const project=state.project,beats=(project.shortFormBeats||[]).slice().sort((a,b)=>a-b);
+    const project=state.project,beats=project.markers.filter(m=>m.name==='Beat').map(m=>m.time).sort((a,b)=>a-b);
     const seen=new Set();
     const targets=selectedClips().filter(c=>{const group=c.linkId||c.id;if(c.kind==='audio'||seen.has(group))return false;seen.add(group);return true;}).sort((a,b)=>a.start-b.start);
     if(!targets.length || beats.length<2)throw Error('Select visual clips and create at least two beat markers first');

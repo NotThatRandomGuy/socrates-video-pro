@@ -71,9 +71,10 @@ await check('music peaks create beats and reactive keys, then cuts fit those bea
  state.media.push({id:'beat-music',name:'Beat music',type:'audio',audioBuffer:buffer,duration:3});
  const audio=Model.newClip('audio',{mediaId:'beat-music',duration:3,sourceDuration:3});audioTracks()[0].clips.push(audio);
  const visual=Cmd.addGenerated('shape',{}, {duration:2.5});Cmd.select(visual.id);
- await ShortForm.detectBeats();if(state.project.shortFormBeats.length<3)return false;
+ await ShortForm.detectBeats();let beats=state.project.markers.filter(m=>m.name==='Beat');if(beats.length<3)return false;
+ Cmd.shiftAfter(0,.25);beats=state.project.markers.filter(m=>m.name==='Beat');
  await ShortForm.reactive(.8);if(!KF.has(visual,'transform.scaleX'))return false;
- ShortForm.fitBeats();return visual.start===state.project.shortFormBeats[0]&&Math.abs(visual.duration-(state.project.shortFormBeats[1]-state.project.shortFormBeats[0]))<1e-8;
+ ShortForm.fitBeats();return visual.start===beats[0].time&&Math.abs(visual.duration-(beats[1].time-beats[0].time))<1e-8;
 })()`);
 await check('bad masks are rejected and linked tracks remain protected',`(async()=>{
  const data=Project.serialize();data.project.tracks[0].clips[0].shortForm.maskKeys=[{t:0,points:[[0,0],[1,1],[Infinity,0]]}];

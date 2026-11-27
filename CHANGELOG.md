@@ -22,6 +22,7 @@
 - Fixed split operations using link identifiers that matched built-in object property names.
 - Prevented trimming inconsistent source metadata from producing a negative clip duration.
 - Animated outlines shift and scale with trims, splits, and speed changes.
+- Beat-based cuts follow the current marker positions after ripple edits, so moving the timeline keeps the cut grid in sync.
 - Component selection is preserved across launches. Disabling the component removes its installed code without deleting project data.
 - Tracking respects source crop, anchor, rotation, and animated positioning, and stops when the selected project or source changes.
 
