@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import {launch} from './harness.mjs';
 const {check,evalJs,results,errors,done}=await launch();
-for(const tag of ['v1.0.0','v1.1.0','v1.2.0','v1.2.5']) {
+for(const tag of ['v1.0.0','v1.1.0','v1.2.0','v1.2.5','v1.2.10']) {
  const fixture=JSON.parse(fs.readFileSync('tests/fixtures/'+tag+'.json','utf8'));
  await evalJs('window.archive='+JSON.stringify(fixture));
  await check(tag+' project retains every original field through opening and saving',`(async()=>{

@@ -110,11 +110,14 @@
   if (restored) UI.toast('Recovered previous session'); else Events.emit('project:changed');
   Events.emit('media:changed'); Events.emit('selection:changed'); Events.emit('time:changed'); Events.emit('playback:changed');
   Preview.layout(); Player.requestRender(); UI.refreshToolbar();
-  await Startup.init(restored);
+  document.body.classList.add('setting-up');
   document.body.classList.remove('booting');
+  await Components.init();
+  await Startup.init(restored);
+  document.body.classList.remove('setting-up');
   Updates.init().catch(() => {});
   // unlock audio on first interaction
   const unlock = () => { AudioEngine.resume(); window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); }; window.addEventListener('pointerdown', unlock); window.addEventListener('keydown', unlock);
   Events.on('media:changed', () => Player.requestRender());
-  document.fonts?.addEventListener('loadingdone', () => Player.requestRender());
+  document.fonts?.addEventListener('loadingdone', () => { Compositor.clearCaches(); Player.requestRender(); });
 })();

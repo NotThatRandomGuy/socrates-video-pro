@@ -23,10 +23,10 @@ export async function launch({ port = 0, debugPort = 0, fileProtocol = false } =
   const evalJs = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.result.exceptionDetails) throw new Error('eval: ' + (r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text)); return r.result.result.value; };
   await send('Runtime.enable'); await send('Page.enable');
   const url = fileProtocol ? pathToFileURL(path.join(ROOT, 'index.html')).href : `http://127.0.0.1:${port}/index.html`;
-  await send('Page.addScriptToEvaluateOnNewDocument', {source:"try { localStorage.setItem('socrates-update-preferences',JSON.stringify({enabled:false})); } catch {}"});
+  await send('Page.addScriptToEvaluateOnNewDocument', {source:"try { localStorage.setItem('socrates-short-form-component',JSON.stringify({enabled:false,decided:true})); localStorage.setItem('socrates-update-preferences',JSON.stringify({enabled:false})); } catch {}"});
   await send('Page.navigate', { url });
   const bootDeadline = Date.now() + 30000;
-  while (!await evalJs("typeof Cmd === 'object' && document.body && !document.body.classList.contains('booting')")) {
+  while (!await evalJs("typeof Cmd === 'object' && document.body && !document.body.classList.contains('booting') && !document.body.classList.contains('setting-up')")) {
     if (Date.now() > bootDeadline) {
       chrome.kill(); server.close();
       throw Error('Editor did not finish startup: ' + errors.join('; '));

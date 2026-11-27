@@ -63,7 +63,7 @@ const Updates = (() => {
         const result=await desktop.download();finished=true;controller.abort();
         if(!result || result.cancelled)return;
         const action=await UI.modal('Your verified update is ready',U.el('p',{},instructions(result.kind)),[{label:'Keep editing'},{label:result.kind==='setup'?'Open installer':'Show downloaded file',primary:true,value:'open'}]);
-        if(action==='open')await desktop.install();
+        if(action==='open'){await Components.choose();await desktop.install();}
       } catch(error){finished=true;controller.abort();UI.toast(error.message,6500);}
       finally{downloading=false;}
       return;

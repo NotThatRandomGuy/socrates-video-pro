@@ -77,6 +77,7 @@ async function createWindow() {
   if (smoke) {
     try {
       await new Promise(resolve => setTimeout(resolve, 3000));
+      if(app.isPackaged && !fs.existsSync(path.join(process.resourcesPath,'short-form-payload','studio.js')))throw Error('Optional component payload missing');
       if(process.platform==='win32' && app.isPackaged) {
         const verifier=path.join(process.resourcesPath,'app.asar.unpacked','desktop','verify-update.ps1');
         if(!fs.existsSync(verifier))throw Error('Packaged Windows update verifier missing');
@@ -85,6 +86,8 @@ async function createWindow() {
         if (document.body.classList.contains('booting')) throw Error('Boot failed');
         if (typeof require !== 'undefined') throw Error('Renderer Node integration enabled');
         if (!document.querySelector('.welcome') || !document.querySelector('.welcome-tutorial')) throw Error('Welcome screen missing');
+        const componentInfo=await window.desktopComponents.info();
+        if(componentInfo.enabled || !componentInfo.decided) throw Error('Base-only component state failed');
         if (!window.desktopUpdates || typeof require !== 'undefined') throw Error('Update bridge or sandbox failed');
         const updateInfo=await window.desktopUpdates.info();
         if(updateInfo.version!==APP_VERSION) throw Error('Updater version mismatch');
@@ -114,6 +117,7 @@ async function createWindow() {
   }
 }
 app.whenReady().then(() => {
+  require('./components.cjs').register({app,ipcMain,dialog,getWindow:()=>win,smoke});
   require('./updates.cjs').register({app,ipcMain,dialog,shell,getWindow:()=>win});
   return createWindow();
 }).catch(error => { console.error(error); app.exit(1); });

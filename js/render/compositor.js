@@ -193,9 +193,16 @@ const Compositor = (() => {
   /* ---------- draw one clip ---------- */
   const pixCanvas = off();
   function drawClip(ctx, clip, t, W, H, trans, opts = {}) {
+    const samples=U.clamp(Math.round(clip.shortForm?.blurSamples || 1),1,8);
+    if(samples>1 && !opts.motionSample){
+      for(let sample=samples-1;sample>0;sample--){
+        const time=Math.max(clip.start,t-sample/state.project.fps/samples);
+        drawClip(ctx,clip,time,W,H,trans,{...opts,motionSample:true,motionWeight:.35/samples});
+      }
+    }
     const e = evalClip(clip, t);
     const tm = transMods(trans, W, H), mm = motionMods(clip, e.lt, W, H);
-    const alpha = e.opacity * tm.alpha * mm.alpha; if (alpha <= 0) return;
+    const alpha = e.opacity * tm.alpha * mm.alpha * (opts.motionWeight ?? 1); if (alpha <= 0) return;
     if (clip.kind === 'adjustment') { drawAdjustment(ctx, clip, e, W, H, alpha, t); return; }
     const src = clipSource(clip, t, e, W, H); if (!src) return;
     let img = src.img, iw = src.w, ih = src.h;
@@ -221,8 +228,16 @@ const Compositor = (() => {
     const ox = -dw / 2 - e.anchorX * dw, oy = -dh / 2 - e.anchorY * dh;
     if (shadow) { ctx.shadowColor = U.hexToRgba(shadow.color || '#000', shadow.p.opacity); ctx.shadowBlur = shadow.p.blur; ctx.shadowOffsetX = shadow.p.x; ctx.shadowOffsetY = shadow.p.y; }
     if (e.cornerRadius > 0) { roundRectPath(ctx, ox, oy, dw, dh, e.cornerRadius); ctx.clip(); }
+    const outline=ShortFormRender.mask(clip,e.lt);
+    if(outline){
+      ctx.beginPath();
+      if(clip.shortForm.invertMask)ctx.rect(ox,oy,dw,dh);
+      outline.forEach(([x,y],i)=>{const px=ox+(x*iw-sx)/sw*dw,py=oy+(y*ih-sy)/sh*dh;if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);});
+      ctx.closePath();ctx.clip('evenodd');
+    }
     try {
-      if (tm.pixel > 0) { const bs = Math.max(1, Math.round(tm.pixel * 48)); const pw = Math.max(1, Math.round(dw / bs)), ph = Math.max(1, Math.round(dh / bs)); pixCanvas.width = pw; pixCanvas.height = ph; const pc = pixCanvas.getContext('2d'); pc.drawImage(img, sx, sy, sw, sh, 0, 0, pw, ph); ctx.imageSmoothingEnabled = false; ctx.drawImage(pixCanvas, ox, oy, dw, dh); }
+      if(clip.shortForm && (clip.shortForm.rotationX || clip.shortForm.rotationY || clip.shortForm.depth || KF.has(clip,'shortForm.rotationX') || KF.has(clip,'shortForm.rotationY') || KF.has(clip,'shortForm.depth')))ShortFormRender.draw(ctx,img,sx,sy,sw,sh,ox,oy,dw,dh,clip,e.lt);
+      else if (tm.pixel > 0) { const bs = Math.max(1, Math.round(tm.pixel * 48)); const pw = Math.max(1, Math.round(dw / bs)), ph = Math.max(1, Math.round(dh / bs)); pixCanvas.width = pw; pixCanvas.height = ph; const pc = pixCanvas.getContext('2d'); pc.drawImage(img, sx, sy, sw, sh, 0, 0, pw, ph); ctx.imageSmoothingEnabled = false; ctx.drawImage(pixCanvas, ox, oy, dw, dh); }
       else ctx.drawImage(img, sx, sy, sw, sh, ox, oy, dw, dh);
     } catch (err) { }
     ctx.restore();

@@ -9,3 +9,7 @@ contextBridge.exposeInMainWorld('desktopUpdates',{
   install:()=>ipcRenderer.invoke('updates:install'),
   releaseNotes:()=>ipcRenderer.invoke('updates:notes')
 });
+
+contextBridge.exposeInMainWorld('desktopComponents',{
+ info:()=>ipcRenderer.invoke('components:info'),set:enabled=>ipcRenderer.invoke('components:set',enabled),source:()=>ipcRenderer.invoke('components:source')
+});

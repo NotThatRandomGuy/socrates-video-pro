@@ -1,9 +1,9 @@
 {
   "name": "socrates-video-pro",
-  "version": "1.2.10",
+  "version": "1.3.0",
   "description": "A local video editing studio for the web, Windows, Linux, and macOS",
   "author": "NotThatRandomGuy",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "private": true,
   "main": "desktop/main.cjs",
   "repository": {
@@ -29,6 +29,7 @@
     "electron-builder": "26.18.0"
   },
   "build": {
+    "extraResources": [{"from":"components/short-form","to":"short-form-payload"}],
     "asarUnpack": ["desktop/verify-update.ps1"],
     "appId": "io.github.notthatrandomguy.socrates-video-pro",
     "productName": "Socrates Video Pro",
@@ -55,6 +56,7 @@
       "signExecutable": false
     },
     "nsis": {
+      "include": "desktop/short-form.nsh",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

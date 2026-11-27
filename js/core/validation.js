@@ -60,6 +60,15 @@ const ProjectValidation = (() => {
         }
         if (c.keyframes === null || typeof c.keyframes !== 'object' || Array.isArray(c.keyframes)) throw Error('Invalid keyframe data');
         if (c.linkId !== null && typeof c.linkId !== 'string') throw Error('Invalid clip link');
+        const sf=c.shortForm;
+        number(sf.rotationX,-80,80,'3D rotation');number(sf.rotationY,-80,80,'3D rotation');number(sf.depth,-10000,10000,'3D depth');number(sf.blurSamples,1,8,'motion blur samples');
+        if(sf.maskKeys.length>1000)throw Error('Too many mask outlines');
+        for(const key of sf.maskKeys){
+          number(key.t,-864000,864000,'mask time');
+          if(!Array.isArray(key.points)||key.points.length<3||key.points.length>128)throw Error('Invalid mask outline');
+          for(const point of key.points){if(!Array.isArray(point)||point.length!==2)throw Error('Invalid mask point');point.forEach(v=>number(v,0,1,'mask coordinate'));}
+        }
+        sf.maskKeys.sort((a,b)=>a.t-b.t);
         if (c.shape) {
           number(c.shape.points, 3, 512, 'shape point count');
           number(c.shape.width, 1, 8192, 'shape width'); number(c.shape.height, 1, 8192, 'shape height');

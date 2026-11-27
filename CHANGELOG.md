@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.3.0 — 2026-11-27
+
+### Major Updates
+
+- Added optional Short Form Studio with a workspace for edits and reels. It includes animated text, beat detection and BPM grids, fitting cuts to beats, point tracking, manual animated rotoscoping, speed ramps, zooms, shakes, visual overlays, transitions, masking, transform motion blur, perspective animation, audio-reactive scale, color correction, templates, and baked expressions.
+- Added an optional-component checkbox to Windows setup and update installers. Other editions offer the choice in first-launch setup and before opening update packages. Components can be enabled or disabled later from Help.
+- Changed this release's project license to GNU GPL version 3, with attribution to NotThatRandomGuy.
+
+### Minor Updates
+
+- Short-form edits save as editable clips, effects, animation keys, and outline data. Saved masks and perspective continue rendering when the authoring component is disabled.
+- Short Form Studio installs from a bundled payload, so accepting the component does not require an internet connection.
+- Added tests for component consent, base-only operation, linked source timing, texture tracking, rendering, undo, saved projects, and tutorial visibility.
+- Documented tool workflows and the limits of local point tracking, manual rotoscoping, and plane-based perspective animation.
+
+### Bug Fixes
+
+- Removed background blur from the tutorial and moved its dialog to the lower corner so highlighted workspace areas are easier to see.
+- Refreshes cached title rendering when downloaded fonts finish loading, so fallback lettering is replaced correctly.
+- Fixed split operations using link identifiers that matched built-in object property names.
+- Prevented trimming inconsistent source metadata from producing a negative clip duration.
+- Animated outlines shift and scale with trims, splits, and speed changes.
+- Component selection is preserved across launches. Disabling the component removes its installed code without deleting project data.
+- Tracking respects source crop, anchor, rotation, and animated positioning, and stops when the selected project or source changes.
+
 ## 1.2.10 — 2026-11-26
 
 ### Major Updates

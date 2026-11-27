@@ -192,7 +192,7 @@ const Cmd = (() => {
   function splitAt(t = state.currentTime, ids = null) {
     const targets = ids ? ids.map(findClip).filter(Boolean) : (state.selection.size ? selectedClips() : allClips().filter(c => !findTrackOfClip(c.id).locked));
     const hits = targets.filter(c => editable(c) && t > c.start + MIN_DUR && t < clipEnd(c) - MIN_DUR); if (!hits.length) return;
-    mutate('Split', () => { const linkMap = {}; hits.forEach(c => { const r = splitClip(c, t); if (r && c.linkId) { if (!linkMap[c.linkId]) linkMap[c.linkId] = U.uid('ln'); r.linkId = linkMap[c.linkId]; } }); }); refresh();
+    mutate('Split', () => { const linkMap = new Map(); hits.forEach(c => { const r = splitClip(c, t); if (r && c.linkId) { if (!linkMap.has(c.linkId)) linkMap.set(c.linkId,U.uid('ln')); r.linkId = linkMap.get(c.linkId); } }); }); refresh();
   }
 
   /* ---------------- move / trim (used by timeline drags; caller wraps History) ---------------- */
@@ -211,7 +211,7 @@ const Cmd = (() => {
   function trimRight(clip, newEnd) {
     if (!editable(clip) || !Number.isFinite(newEnd)) return;
     const maxEnd = isUnbounded(clip) ? Infinity : clip.start + (clip.sourceDuration - clip.offset) / clip.speed;
-    newEnd = U.clamp(newEnd, clip.start + MIN_DUR, maxEnd); clip.duration = newEnd - clip.start;
+    newEnd = U.clamp(newEnd, clip.start + MIN_DUR, Math.max(clip.start + MIN_DUR,maxEnd)); clip.duration = newEnd - clip.start;
   }
   function linkedOf(clip) { return clip.linkId ? allClips().filter(c => c.linkId === clip.linkId && c !== clip) : []; }
 

@@ -98,6 +98,7 @@ const Model = {
       transitionIn: { type: 'none', duration: .5 }, transitionOut: { type: 'none', duration: .5 },
       audio: { volume: 1, pan: 0, muted: false, fadeIn: 0, fadeOut: 0, eqLow: 0, eqMid: 0, eqHigh: 0, highpass: 0, lowpass: 20000, normalize: 1, pitch: 0 },
       motion: { preset: 'none' },
+      shortForm: { rotationX:0, rotationY:0, depth:0, blurSamples:1, maskKeys:[], invertMask:false },
     };
     if (kind === 'text') base.text = Model.defaultText();
     if (kind === 'shape') base.shape = { type: 'rect', fill: '#6c8cff', stroke: '#ffffff', strokeWidth: 0, width: 600, height: 340, radius: 24, gradient: false, fill2: '#b58cff', gradAngle: 45, points: 5 };
@@ -234,7 +235,7 @@ function mediaUsedBy(mediaId) { return allClips().filter(c => c.mediaId === medi
    KEYFRAMES — keyframes[path] = [{t, v, ease}] with t relative to clip start (seconds)
 ============================================================ */
 const KF = {
-  KEYABLE: ['transform.x', 'transform.y', 'transform.scaleX', 'transform.scaleY', 'transform.rotation', 'transform.opacity', 'transform.anchorX', 'transform.anchorY', 'audio.volume', 'audio.pan', 'crop.l', 'crop.t', 'crop.r', 'crop.b', 'cornerRadius', 'text.size', 'text.letterSpacing', 'shape.width', 'shape.height'],
+  KEYABLE: ['shortForm.rotationX','shortForm.rotationY','shortForm.depth','transform.x', 'transform.y', 'transform.scaleX', 'transform.scaleY', 'transform.rotation', 'transform.opacity', 'transform.anchorX', 'transform.anchorY', 'audio.volume', 'audio.pan', 'crop.l', 'crop.t', 'crop.r', 'crop.b', 'cornerRadius', 'text.size', 'text.letterSpacing', 'shape.width', 'shape.height'],
   has(clip, path) { return !!(clip.keyframes && clip.keyframes[path] && clip.keyframes[path].length); },
   get(clip, path) { return (clip.keyframes && clip.keyframes[path]) || []; },
   /* evaluate a property at local time lt (seconds from clip start) */
@@ -272,8 +273,8 @@ const KF = {
     return fx.params[param];
   },
   /* shift keyframes when clip is trimmed from the left */
-  shift(clip, dt) { Object.values(clip.keyframes || {}).forEach(arr => arr.forEach(k => k.t += dt)); },
-  scale(clip, factor) { Object.values(clip.keyframes || {}).forEach(arr => arr.forEach(k => k.t *= factor)); },
+  shift(clip, dt) { (clip.shortForm?.maskKeys || []).forEach(k=>k.t+=dt); Object.values(clip.keyframes || {}).forEach(arr => arr.forEach(k => k.t += dt)); },
+  scale(clip, factor) { (clip.shortForm?.maskKeys || []).forEach(k=>k.t*=factor); Object.values(clip.keyframes || {}).forEach(arr => arr.forEach(k => k.t *= factor)); },
 };
 
 /* evaluated (animated) snapshot of a clip at project time t */
